@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Мой органайзер</title>
+<meta name="theme-color" content="#faf9f6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Органайзер">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="app.css">
+<script src="boot.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header>
+  <h1>Мой органайзер</h1>
+  <div id="status" class="muted small">Загрузка…</div>
+</header>
+<div id="banners" aria-live="polite"></div>
+<nav id="nav"></nav>
+<main id="main"></main>
+<pre id="boot-error" class="banner error" hidden></pre>
+<noscript><p class="banner error">Для работы органайзера нужен включённый JavaScript.</p></noscript>
+</body>
+</html>
