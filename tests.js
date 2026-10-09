@@ -11,6 +11,7 @@ import * as A from './actions.js';
 import { overdueForReview, eventsForDay, buildDaySummary, eveningPreviewDue, unfinishedBefore, deletedRecords, tasksForDay } from './selectors.js';
 import { APP_VERSION } from './version.js';
 import { esc } from './util.js';
+import { MODES, readAppearance, saveAppearance, applyAppearance } from './appearance.js';
 
 const tests = [];
 const test = (group, name, fn) => tests.push({ group, name, fn });
@@ -634,6 +635,66 @@ test('Вечерняя сводка (подготовка)', 'когда пок�
 // ================= safety of the HTML =================
 test('Безопасность', 'esc экранирует все опасные символы', () => {
   eq(esc(`<img src=x onerror="a('b')">&`), '&lt;img src=x onerror=&quot;a(&#39;b&#39;)&quot;&gt;&amp;');
+});
+
+// ================= appearance (0.2.2) =================
+const T = 'Оформление';
+test(T, 'по умолчанию — «Как в системе»; неизвестное значение тоже', () => {
+  eq(readAppearance(createMemoryAdapter()), 'system');
+  eq(readAppearance(createMemoryAdapter({ [KEYS.appearance]: 'purple' })), 'system');
+  const broken = createMemoryAdapter(); broken.failReads = true;
+  eq(readAppearance(broken), 'system');
+});
+test(T, 'выбор сохраняется и читается снова', () => {
+  const s = createMemoryAdapter();
+  for (const m of MODES) { ok(saveAppearance(s, m)); eq(readAppearance(s), m); }
+});
+test(T, 'неизвестный режим не сохраняется', () => {
+  const s = createMemoryAdapter();
+  let threw = false;
+  try { saveAppearance(s, 'purple'); } catch { threw = true; }
+  ok(threw);
+  eq(s.get(KEYS.appearance), null);
+});
+test(T, 'если сохранить не удалось — сообщается false', () => {
+  const s = createMemoryAdapter(); s.failWrites = true;
+  eq(saveAppearance(s, 'dark'), false);
+});
+test(T, 'смена оформления не трогает данные и автокопии', () => {
+  const { store, storage } = setup();
+  A.addTasksFromText(store, 'A');
+  const data = storage.get(KEYS.data), snaps = storage.get(KEYS.snapshots), dev = storage.get(KEYS.device);
+  saveAppearance(storage, 'dark');
+  saveAppearance(storage, 'light');
+  eq([storage.get(KEYS.data), storage.get(KEYS.snapshots), storage.get(KEYS.device)], [data, snaps, dev]);
+  ok(!buildBackupText(store.doc, NOW).includes('organizer:appearance'), 'не входит в резервную копию');
+});
+test(T, 'применение: атрибут data-theme и цвет строки состояния', () => {
+  const d = document.implementation.createHTMLDocument('t');
+  d.head.innerHTML = '<meta name="theme-color" data-scheme="light" content=""><meta name="theme-color" data-scheme="dark" content="">';
+  const metas = () => [...d.querySelectorAll('meta')].map(m => m.getAttribute('content'));
+  applyAppearance('dark', d);
+  eq(d.documentElement.getAttribute('data-theme'), 'dark');
+  eq(metas(), ['#1b1a18', '#1b1a18']);
+  applyAppearance('light', d);
+  eq(d.documentElement.getAttribute('data-theme'), 'light');
+  eq(metas(), ['#f2eee6', '#f2eee6']);
+  applyAppearance('system', d);
+  eq(d.documentElement.hasAttribute('data-theme'), false);
+  eq(metas(), ['#f2eee6', '#1b1a18']);
+});
+test(T, 'boot.js читает тот же ключ, что и приложение (без мигания при запуске)', async () => {
+  const text = await (await fetch('boot.js', { cache: 'no-store' })).text();
+  ok(text.includes(`getItem('${KEYS.appearance}')`), 'ключ в boot.js должен совпадать с KEYS.appearance');
+});
+test(T, 'цвета строки состояния совпадают с фоном страницы в app.css', async () => {
+  const css = await (await fetch('app.css', { cache: 'no-store' })).text();
+  const lightBg = css.match(/--bg: (#[0-9a-f]{6})/i)[1];
+  const darkBg = css.match(/data-theme="dark"\] \{[\s\S]*?--bg: (#[0-9a-f]{6})/i)[1];
+  const d = document.implementation.createHTMLDocument('t');
+  d.head.innerHTML = '<meta name="theme-color" data-scheme="light" content=""><meta name="theme-color" data-scheme="dark" content="">';
+  applyAppearance('system', d);
+  eq([...d.querySelectorAll('meta')].map(m => m.getAttribute('content')), [lightBg, darkBg]);
 });
 
 // ================= installed-app files (need http/https) =================

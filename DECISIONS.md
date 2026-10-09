@@ -3,7 +3,7 @@
 This file is the single list of rules for the app. Both AIs (ChatGPT and Claude) and the owner follow it.
 A rule changes only when this file is edited on purpose, with the date and the reason.
 
-Last updated: 2026-10-09 (Phase 0 correction, app version 0.2.1)
+Last updated: 2026-10-09 (appearance update, app version 0.2.2)
 
 ---
 
@@ -49,6 +49,72 @@ Last updated: 2026-10-09 (Phase 0 correction, app version 0.2.1)
 
 ---
 
+## B2. Appearance (owner, 2026-10-09 — implemented in 0.2.2)
+
+- Three modes in **«Настройки» → «Оформление»** (button in the header): **Светлое** (soft warm off-white, no bright white), **Тёмное** (muted warm dark greys, soft off-white text), **Как в системе** (follows the iPhone's light/dark setting live, without restarting). Default: «Как в системе».
+- The choice is saved **on this device only**, under its own key `organizer:appearance`. It is **not** part of the data document or backups, and changing it never writes tasks, events, projects, lists, automatic copies or device info.
+- It is applied by `boot.js` before the page is drawn, so a dark choice never flashes light on start.
+- Readability rule: every text/background colour pair has a contrast ratio of at least **4.5:1** in both themes (checked automatically on every screen). Native controls (date and time pickers, selects, checkboxes) follow the theme via `color-scheme`.
+- Limits: confirmation dialogs («Удалить?» etc.) are drawn by iOS and always follow the iPhone's own setting. The launch screen and status bar of the installed app are controlled by iOS; check them on the device.
+
+## B3. Quarterly Cleanup — «Уборка» (confirmed future feature, not built yet)
+
+**Goal.** Every three months, offer to review and remove old records that are no longer useful, so the organizer stays uncluttered. Saving storage space is not the goal. **Nothing is ever deleted without the user's explicit approval.**
+
+**When it is offered**
+- On opening the app (or returning to it) after the interval has passed: 3 months since the last finished or skipped cleanup, or since the data was first created (so new users are not asked on day one).
+- As a calm card on «Сегодня» (not a pop-up): «Уборка: можно убрать N старых записей» with «Посмотреть» and «Позже».
+- Shown only when there is at least one candidate. Can also be started by hand at any time (from «Данные»).
+- **Postpone:** «через неделю», «через месяц», or «пропустить этот квартал» (counts as reviewed, deletes nothing).
+
+**What can appear, and what is pre-selected**
+
+| Category | Shown when | Pre-selected? |
+|---|---|---|
+| Completed tasks | done, completed more than 30 days ago | Yes |
+| Past events | ended more than 30 days ago; a repeating series only after its last date | Yes |
+| Completed lists | every item ticked, unchanged for 30 days | Yes |
+| Ticked items in lists still in use | ticked, unchanged for 30 days (the list itself stays) | Yes |
+| Completed projects | marked done by the user, no unfinished linked tasks, unchanged for 30 days | Yes |
+| Projects that look finished but are not marked done | all milestones and the counter complete | **No** |
+| Long-untouched unfinished tasks | unchanged for 6 months | **No** (shown collapsed, for review only) |
+
+**Never selected automatically:** unfinished tasks, active projects, future or ongoing events.
+**Never shown at all:** records marked «Хранить всегда», records already deleted, quarantined records, and projects that still have unfinished linked tasks.
+
+The 30-day and 6-month ages are proposals — confirm or change.
+
+**Preview and choice**
+- Records are grouped by category, each with a count and a select-all checkbox. Each group expands to the individual records, each with its own checkbox.
+- Any record can be marked **«Хранить всегда»** from the preview. Such records never appear in a cleanup again. This flag is saved in the record and in backups, and can be removed later.
+- A running total: «Выбрано: N».
+
+**Backup step (before deleting)**
+- The preview offers «Сохранить резервную копию» (the normal export).
+- If no external copy was saved during this cleanup, the app shows a clear warning before going on: «Внешняя копия не сохранена. Удалённое можно вернуть в течение 30 дней, но не позже — и не при потере телефона.» Continuing then needs a second, explicit confirmation.
+- Honest limit: the app knows the share sheet or download finished, not that the file really reached iCloud Drive.
+
+**Confirmation and deletion**
+- Final step: «Удалить N записей? Их можно вернуть в течение 30 дней («Данные» → «Удалённые») или сразу кнопкой «Отменить уборку»». Buttons «Удалить» / «Назад».
+- An automatic copy («перед уборкой») is taken first, as for import.
+- Deletion is **all-or-nothing**, like import and restore. Success is reported only after the change is confirmed saved. If saving fails, nothing is deleted.
+
+**How it works with soft deletion**
+- Cleanup only **soft-deletes**: it sets `deletedAt` and marks each record with the cleanup's id, using the same 30-day restore window as normal deletes. It never removes anything permanently itself; the existing 30-day purge does that later. This is stated clearly in the confirmation.
+- «Отменить уборку» restores the whole batch in one tap for 30 days. Single records can also be restored as today.
+- Cleanup never touches records that are already deleted: their 30-day timer is not reset, and they are not restored.
+- Deleting a project never deletes its linked tasks.
+- Restoring an automatic copy or importing a backup made **before** a cleanup brings the cleaned records back. That is what restoring means, but the restore/import preview will say so: «в копии есть N записей, убранных при уборке …».
+- Deleting a «Хранить всегда» record by hand asks for one extra confirmation.
+
+**Data model changes (when built)**
+- Records gain an optional `keep: true` flag («Хранить всегда»). Records soft-deleted by a cleanup carry `cleanupId`.
+- `settings.cleanup = { lastReviewedAt, postponedUntil }`, included in backups.
+- Projects need an explicit «завершён» status (planned with Phase 3). The «Удалённые» list needs to show and restore ticked list items and milestones.
+- Schema version bump with an upgrade step and tests, as rule E6 requires.
+
+**Timing:** after Phase 3, because it depends on project status and on restoring list items and milestones. No changes now.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure
@@ -58,7 +124,8 @@ Last updated: 2026-10-09 (Phase 0 correction, app version 0.2.1)
 
 | File | Job |
 |---|---|
-| `index.html`, `app.css`, `boot.js` | Page shell, styles, "app did not start" safety message |
+| `index.html`, `app.css`, `boot.js` | Page shell, styles (light/dark tokens), early theme + "app did not start" safety message |
+| `appearance.js`, `view-settings.js` | Appearance preference and the «Настройки» screen |
 | `app.js` | Starts the app, draws the current tab, routes every click/change/submit |
 | `actions.js` | Every user change as a named operation (add task, move task, delete, …) |
 | `store.js` | The only code that reads/writes app data: validation, saving, copies, recovery |
@@ -92,9 +159,10 @@ Last updated: 2026-10-09 (Phase 0 correction, app version 0.2.1)
 | `organizer:snapshots` | Automatic copies, newest first |
 | `organizer:rescue` | Raw text that could not be read (every distinct text is kept; nothing is dropped) |
 | `organizer:device` | This device only: `lastBackupAt`, `lastDailySnapshot`, `lastEveningPreviewShownFor` |
+| `organizer:appearance` | This device only: `system`, `light` or `dark`. Read early by `boot.js` (read-only) |
 | `arina-organizer-v1` | The prototype's data. **Read once, never written or deleted.** |
 
-`localStorage` is enough for this data size (hundreds of KB). Only `storage.js` touches it.
+`localStorage` is enough for this data size (hundreds of KB). Only `storage.js` touches it — with one read-only exception: `boot.js` reads `organizer:appearance` before the app starts.
 
 ### Dates and times
 - Calendar dates are local date keys `YYYY-MM-DD`; times are `HH:MM`; event moments are local wall-clock `YYYY-MM-DDTHH:MM` (no time zone).

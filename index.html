@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Мой органайзер</title>
-<meta name="theme-color" content="#faf9f6">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f2eee6" media="(prefers-color-scheme: light)" data-scheme="light">
+<meta name="theme-color" content="#1b1a18" media="(prefers-color-scheme: dark)" data-scheme="dark">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -19,7 +21,10 @@
 </head>
 <body>
 <header>
-  <h1>Мой органайзер</h1>
+  <div class="head-row">
+    <h1>Мой органайзер</h1>
+    <button type="button" id="settings-btn" data-action="tab" data-tab="settings">Настройки</button>
+  </div>
   <div id="status" class="muted small">Загрузка…</div>
 </header>
 <div id="banners" aria-live="polite"></div>

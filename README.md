@@ -1,4 +1,4 @@
-# Мой органайзер — version 0.2.1 (Phase 0)
+# Мой органайзер — version 0.2.2 (Phase 0)
 
 A personal organizer that runs entirely on your iPhone or iPad: tasks, events, projects and lists.
 No account, no cloud, no AI. Your data stays on the device; you keep backups yourself.
@@ -66,6 +66,7 @@ If the new app is ever opened at the same address where the prototype stored dat
 - **Прогресс** — projects with milestones and a number counter (e.g. 7 of 12 chapters).
 - **Списки** — shopping and personal lists.
 - **Данные** — backups, restore, automatic copies, deleted items, storage status.
+- **Настройки** (button at the top right) — appearance: «Светлое», «Тёмное» or «Как в системе» (follows the iPhone). Saved on this device.
 
 **Backups — the one habit that matters.** Data lives only on this device. At least once a week:
 **Данные → Сохранить копию → Сохранить в Файлы** (choose iCloud Drive). The Today screen reminds you after 7 days.

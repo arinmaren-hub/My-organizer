@@ -7,6 +7,7 @@ export const KEYS = {
   snapshots: 'organizer:snapshots',  // automatic safety copies, newest first
   rescue: 'organizer:rescue',        // raw text that could not be read, kept untouched
   device: 'organizer:device',        // per-device info: last backup, last daily copy
+  appearance: 'organizer:appearance',// per-device look: 'system' | 'light' | 'dark' (boot.js reads it too)
   legacy: 'arina-organizer-v1'       // the first prototype's key (read, never written)
 };
 

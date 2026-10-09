@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.2 — 2026-10-09 — Appearance: light, dark, system
+
+**New**
+- «Настройки» screen (button in the header) with three appearance modes: «Светлое» (soft warm off-white), «Тёмное» (muted dark colours) and «Как в системе» (follows the iPhone's light/dark setting live). Default: «Как в системе».
+- The choice is saved on this device under its own key and applied before the page is drawn, so there is no flash of the wrong theme on start.
+- All colours are now theme tokens; date and time pickers, selects and checkboxes follow the theme. Every text/background pair has a contrast ratio of at least 4.5:1 in both themes.
+- The light theme no longer uses bright white anywhere.
+
+**Fixed (found while testing this update; existed since 0.2.0)**
+- A redraw the user did not cause, such as the offline cache becoming ready shortly after start, could interrupt typing. The field lost focus (on iPhone the keyboard would close), and text typed in forms other than quick add was lost. Focus, text and cursor position are now kept. Such background redraws also happen less often: only when something visible changed.
+
+**Unchanged**
+- No change to app functions, the data document, backups or automatic copies. Switching the theme writes only `organizer:appearance`.
+
+**Documentation**
+- `DECISIONS.md`: new section B3, Quarterly Cleanup («Уборка»), recorded as a future feature after Phase 3.
+
+**Tests:** 8 new unit tests (73 total) and 22 new click-through checks (93 total). They include a contrast audit of every screen in every mode, and a check that a background redraw does not interrupt typing (this check fails on the previous version).
+
 ## 0.2.1 — 2026-10-09 — Phase 0 correction: failed saves during import and restore
 
 Found in review: `applyImport()` and `restoreSnapshot()` reported success without checking that the new data was saved.

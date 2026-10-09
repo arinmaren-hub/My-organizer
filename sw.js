@@ -6,7 +6,7 @@
 // that an update exists; they then show "Доступна новая версия · Обновить".
 // If you add a new file, add it to ASSETS too (tests.html checks both).
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const CACHE = 'organizer-' + VERSION;
 const ASSETS = [
   './',
@@ -34,7 +34,9 @@ const ASSETS = [
   './view-tasks.js',
   './view-projects.js',
   './view-lists.js',
-  './view-data.js'
+  './view-data.js',
+  './view-settings.js',
+  './appearance.js'
 ];
 
 self.addEventListener('install', event => {

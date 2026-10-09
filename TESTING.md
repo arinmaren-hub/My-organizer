@@ -1,13 +1,13 @@
-# TESTING.md — version 0.2.1
+# TESTING.md — version 0.2.2
 
-## 1. What was actually tested (2026-10-09, by Claude — re-run in full for 0.2.1)
+## 1. What was actually tested (2026-10-09, by Claude — re-run in full for 0.2.2)
 
 **Environment:** headless **Chromium 141** driven by Playwright 1.56 on Linux, iPhone-sized screen (390 × 844, touch), time zone Europe/Athens, served over local http. All runs used the files exactly as packed in the ZIP (unzipped into a fresh folder).
 
 | Test set | Result | Notes |
 |---|---|---|
-| `tests.html` — automated unit tests | **65 / 65 passed** | Run in three time zones: Europe/Athens, America/Los_Angeles (UTC−7) and Pacific/Kiritimati (UTC+14). |
-| `e2e-test.py` — click-through of the real app | **71 / 71 passed**, 3 runs in a row | Listed below. |
+| `tests.html` — automated unit tests | **73 / 73 passed** | Run in three time zones: Europe/Athens, America/Los_Angeles (UTC−7) and Pacific/Kiritimati (UTC+14). |
+| `e2e-test.py` — click-through of the real app | **93 / 93 passed**, 3 runs in a row | Listed below. |
 
 **Click-through checks (all passed):**
 - Start: Today screen opens, 6 tabs, no sideways scrolling at iPhone width.
@@ -27,6 +27,9 @@
 - Offline: service worker takes control; with the network off the app opens and a task can be added.
 - **Failed save during import (0.2.1):** with saving blocked, import shows «Импорт не выполнен» and the reason, no success message, no false «⚠ Не сохранено», the preview stays for a retry, stored data and the screen are unchanged; once saving works again the same import succeeds.
 - **Failed save during restore (0.2.1):** «Восстановление не выполнено», no success message, stored data unchanged.
+- **Appearance (0.2.2):** «Настройки» opens from the header with three choices, default «Как в системе». For «Светлое», «Тёмное», and «Как в системе» with the device both light and dark: the page colour is right; date pickers, selects and checkboxes use the same scheme; and an automatic audit of **every screen** finds no text below 4.5:1 contrast and no bright-white surface. The audit covers the Today review, the import preview, the backup text, the Settings screen, and every banner and message style. The audit itself was checked against planted low-contrast text, a low-contrast field and a white box, and it flagged all three.
+- Appearance: «Как в системе» follows a light/dark switch immediately; «Тёмное» also sets a dark status-bar colour; the choice survives a restart; it is applied **before the app code runs** (tested by blocking `app.js`), so there is no light flash; switching themes leaves the data, automatic copies and device info byte-for-byte unchanged.
+- **Typing is not interrupted (0.2.2):** a background redraw while typing in a list's «Добавить пункт» field keeps focus and text, and continuing to type then pressing Enter adds the full item. (This check fails on 0.2.1, which lost both.)
 - Update: after a new version is published, «Доступна новая версия» appears; «Обновить» loads the new version; data is kept.
 - Prototype data under `arina-organizer-v1` is moved automatically, with a message; the old key is left unchanged.
 - iPhone Safari (not installed): warning that Safari and the Home Screen app have separate data.
@@ -62,7 +65,7 @@ These are exactly what the first-install checklist below covers.
 
 Tick each line; report anything that fails.
 
-- [ ] `https://…/tests.html` in Safari: «65 из 65 тестов пройдено».
+- [ ] `https://…/tests.html` in Safari: «73 из 73 тестов пройдено».
 - [ ] Installed via Share → Add to Home Screen; opens full-screen from the icon.
 - [ ] «Данные → О приложении»: «Запущено с экрана «Домой»: да», «Офлайн-режим: готов…».
 - [ ] Note what «Постоянное хранилище» says (for our records).
@@ -74,6 +77,9 @@ Tick each line; report anything that fails.
 - [ ] «Показать текст копии» → «Скопировать текст» → paste into Notes works.
 - [ ] Import that saved file back: preview appears, «Заменить данные» works.
 - [ ] Delete a task, restore it from «Удалённые».
+- [ ] «Настройки» → «Тёмное»: every tab readable; open a date picker in «Календарь» (it should be dark too). Close and reopen the app: still dark, with no light flash.
+- [ ] «Как в системе», then switch the iPhone between light and dark (Control Centre or Settings → Display & Brightness): the app follows.
+- [ ] Note how the status bar and the launch screen look in dark mode (iOS controls these).
 
 ## 4. Quick check for every new version (about 2 minutes)
 

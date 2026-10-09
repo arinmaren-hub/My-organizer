@@ -16,14 +16,17 @@ import { renderTasks } from './view-tasks.js';
 import { renderProjects } from './view-projects.js';
 import { renderLists } from './view-lists.js';
 import { renderData } from './view-data.js';
+import { renderSettings } from './view-settings.js';
+import { MODES, readAppearance, saveAppearance, applyAppearance } from './appearance.js';
 
 const TABS = [
   ['today', 'Сегодня'], ['calendar', 'Календарь'], ['tasks', 'Задачи'],
   ['projects', 'Прогресс'], ['lists', 'Списки'], ['data', 'Данные']
 ];
-const VIEWS = { today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData };
+const VIEWS = { today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData, settings: renderSettings };
 
-const store = createStore({ storage: createLocalStorageAdapter() });
+const storage = createLocalStorageAdapter();
+const store = createStore({ storage });
 store.load();
 
 const ui = {
@@ -39,8 +42,10 @@ const ui = {
   storageInfo: null,
   standalone: (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true,
   today: dateKey(new Date()),
-  refocus: null
+  refocus: null,
+  appearance: readAppearance(storage) // 'system' | 'light' | 'dark' (already applied by boot.js)
 };
+applyAppearance(ui.appearance);
 
 const $ = sel => document.querySelector(sel);
 const val = (form, name) => { const el = form.elements.namedItem(name); return el ? el.value : ''; };
@@ -86,10 +91,41 @@ function statusText() {
   return `Версия ${APP_VERSION} · данные только на этом устройстве`;
 }
 
+// A redraw that the user did not cause (offline cache ready, another window,
+// midnight) must not interrupt typing: remember the focused field, its text and
+// cursor, and put them back after the redraw. Not done while a form is being
+// submitted, so a submitted field is still cleared normally.
+function captureTyping() {
+  const el = document.activeElement;
+  if (ui.inSubmit || !el || !el.closest || !el.closest('#main') || !el.matches('input, textarea, select') || !el.name || el.type === 'file') return null;
+  const f = el.form;
+  if (!f || !f.dataset.form) return null;
+  let sel = `form[data-form="${CSS.escape(f.dataset.form)}"]`;
+  if (f.dataset.project) sel += `[data-project="${CSS.escape(f.dataset.project)}"]`;
+  if (f.dataset.list) sel += `[data-list="${CSS.escape(f.dataset.list)}"]`;
+  let start = null, end = null;
+  try { start = el.selectionStart; end = el.selectionEnd; } catch { /* not a text field */ }
+  return { sel, name: el.name, value: el.value, start, end };
+}
+
+function restoreTyping(t) {
+  if (!t) return;
+  const f = document.querySelector(t.sel);
+  const el = f && f.elements.namedItem(t.name);
+  if (!el || typeof el.focus !== 'function') return;
+  if (el.value !== t.value) el.value = t.value;
+  el.focus();
+  try { if (t.start != null) el.setSelectionRange(t.start, t.end); } catch { /* not a text field */ }
+}
+
 function render() {
+  const typing = captureTyping();
   ui.today = dateKey(new Date());
   $('#nav').innerHTML = TABS.map(([k, label]) =>
     `<button type="button" class="${ui.tab === k ? 'active' : ''}" data-action="tab" data-tab="${k}"${ui.tab === k ? ' aria-current="page"' : ''}>${label}</button>`).join('');
+  const settingsBtn = $('#settings-btn');
+  settingsBtn.classList.toggle('active', ui.tab === 'settings');
+  if (ui.tab === 'settings') settingsBtn.setAttribute('aria-current', 'page'); else settingsBtn.removeAttribute('aria-current');
   $('#status').textContent = statusText();
   $('#status').className = 'muted small' + (store.status.saveError || store.status.readOnly ? ' bad' : '');
   $('#banners').innerHTML = bannersHtml();
@@ -100,6 +136,7 @@ function render() {
       quick: ui.quick,
       backupNote: backupNote(),
       store, ui,
+      appearance: ui.appearance,
       backupText: () => buildBackupText(store.doc, new Date().toISOString())
     });
   } catch (e) {
@@ -109,6 +146,7 @@ function render() {
       <button type="button" data-action="backup.export">Сохранить копию</button></section>`;
   }
   $('#main').innerHTML = html;
+  restoreTyping(typing);
   if (ui.refocus) {
     const f = document.querySelector(ui.refocus);
     const input = f && f.querySelector('input[name="title"], textarea[name="text"]');
@@ -210,6 +248,19 @@ function restoreSnapshot(id) {
 
 const confirmDelete = () => confirm('Удалить? Восстановить можно во вкладке «Данные» в течение 30 дней.');
 
+// ---------- appearance ----------
+
+// Changes only the look. Never touches the data document or automatic copies.
+function setAppearance(mode) {
+  if (!MODES.includes(mode)) return;
+  applyAppearance(mode);
+  ui.appearance = mode;
+  if (!saveAppearance(storage, mode)) {
+    store.notify('warn', 'Не удалось сохранить выбор оформления — он действует до закрытия приложения.');
+  }
+  render();
+}
+
 // ---------- event routing ----------
 
 const CLICK = {
@@ -234,7 +285,8 @@ const CLICK = {
   'quarantine.download': () => saveTextFile(JSON.stringify(store.doc.quarantine, null, 2), `organizer-quarantine-${dateKey(new Date())}.json`),
   'blocked.download': () => { if (store.status.blockedRaw) saveTextFile(store.status.blockedRaw, `organizer-raw-${dateKey(new Date())}.txt`); },
   'update.apply': () => applyUpdate(),
-  'safari.hide': () => { ui.hideSafariHint = true; render(); }
+  'safari.hide': () => { ui.hideSafariHint = true; render(); },
+  'appearance.set': el => setAppearance(el.dataset.mode)
 };
 
 const CHANGE = {
@@ -294,7 +346,9 @@ document.addEventListener('submit', e => {
   const f = e.target;
   e.preventDefault();
   const fn = FORMS[f.dataset.form];
-  if (fn) run(fn, f, 'Ошибка');
+  if (!fn) return;
+  ui.inSubmit = true;
+  try { run(fn, f, 'Ошибка'); } finally { ui.inSubmit = false; }
 });
 
 // Remember the quick-add draft as it is typed or picked, so redraws never lose it.
@@ -320,6 +374,11 @@ document.addEventListener('visibilitychange', () => {
 
 // Another tab/window of the app saved data: reload it instead of overwriting it later.
 window.addEventListener('storage', e => {
+  if (e.key === KEYS.appearance) {
+    ui.appearance = readAppearance(storage);
+    applyAppearance(ui.appearance);
+    render();
+  }
   if (e.key === KEYS.data && store.reload()) {
     store.notify('info', 'Данные изменены в другом окне — показаны актуальные.');
   }
@@ -339,9 +398,11 @@ async function registerServiceWorker() {
     const reg = await navigator.serviceWorker.register('./sw.js');
     ui.swReg = reg;
     const check = () => {
+      const before = ui.swState + '|' + ui.updateReady;
       ui.swState = reg.active ? 'готов, приложение работает без интернета' : 'устанавливается…';
       if (reg.waiting && navigator.serviceWorker.controller) ui.updateReady = true;
-      render();
+      // Redraw only when something visible changed (state shows on «Данные», update banner everywhere).
+      if (before !== ui.swState + '|' + ui.updateReady && (ui.tab === 'data' || ui.updateReady)) render();
     };
     reg.addEventListener('updatefound', () => {
       const w = reg.installing;

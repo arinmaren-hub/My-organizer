@@ -1,4 +1,11 @@
-body { font-family: system-ui, -apple-system, sans-serif; max-width: 760px; margin: auto; padding: 16px; background: #faf9f6; color: #292929; }
+:root { color-scheme: light dark; }
+body { font-family: system-ui, -apple-system, sans-serif; max-width: 760px; margin: auto; padding: 16px; background: #f2eee6; color: #2a2723; }
+@media (prefers-color-scheme: dark) {
+  body { background: #1b1a18; color: #e6e1d8; }
+  .good { color: #8fc7a8 !important; }
+  .bad { color: #f0a8a2 !important; }
+  small { color: #a49e94 !important; }
+}
 h2 { font-size: 16px; margin: 18px 0 6px; }
 .good { color: #2f6b4f; padding: 3px 0; }
 .bad { color: #b3261e; padding: 3px 0; }

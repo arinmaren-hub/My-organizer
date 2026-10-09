@@ -146,6 +146,17 @@ with sync_playwright() as p:
         pg.locator('label.row:has-text("Молоко") input').check()
         check('Списки: пункты добавляются и отмечаются', pg.locator('label.row.is-done:has-text("Молоко")').count() == 1 and 'Хлеб' in main_text())
 
+    @step('Фоновая перерисовка')
+    def _():
+        pg.fill('form[data-form="item.add"] input[name=title]', 'Печен')
+        pg.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'organizer:appearance' }))")
+        st = pg.evaluate("(() => { const el = document.activeElement; return { name: el && el.name, form: el && el.form && el.form.dataset.form, value: el && el.value }; })()")
+        check('Фоновая перерисовка не сбивает ввод: фокус и набранный текст на месте', st == {'name': 'title', 'form': 'item.add', 'value': 'Печен'}, str(st))
+        pg.keyboard.type('ье')
+        pg.keyboard.press('Enter')
+        check('Фоновая перерисовка: после продолжения ввода пункт добавляется целиком, поле очищается',
+              'Печенье' in main_text() and pg.input_value('form[data-form="item.add"] input[name=title]') == '')
+
     @step('Удаление и восстановление')
     def _():
         tab('Задачи')
@@ -282,6 +293,97 @@ with sync_playwright() as p:
         tab('Данные')
         check('Ошибка 3: раздел «Повреждённые данные» виден', 'Повреждённые данные' in main_text())
 
+    AUDIT_JS = r"""() => {
+      const parse = c => { const m = c && c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+      const lum = ({ r, g, b }) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+      const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      const bgOf = el => { for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0.5) return c; } return parse(getComputedStyle(document.documentElement).backgroundColor); };
+      const visible = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+      const issues = [], seen = new Set();
+      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (w.nextNode()) {
+        const t = w.currentNode, el = t.parentElement;
+        if (!t.textContent.trim() || seen.has(el) || !visible(el) || el.closest('button:disabled, noscript, option')) continue;
+        seen.add(el);
+        const r = ratio(parse(getComputedStyle(el).color), bgOf(el));
+        if (r < 4.5) issues.push(`«${t.textContent.trim().slice(0, 30)}» ${r.toFixed(2)}`);
+      }
+      for (const el of document.querySelectorAll('input:not([type=checkbox]):not([type=file]), textarea, select')) {
+        if (!visible(el)) continue;
+        const r = ratio(parse(getComputedStyle(el).color), bgOf(el));
+        if (r < 4.5) issues.push(`поле ${el.name || el.type} ${r.toFixed(2)}`);
+      }
+      for (const el of document.querySelectorAll('body *')) {
+        if (visible(el) && getComputedStyle(el).backgroundColor === 'rgb(255, 255, 255)') issues.push(`ярко-белый фон: ${el.tagName.toLowerCase()}.${el.className}`);
+      }
+      return issues;
+    }"""
+
+    @step('Оформление')
+    def _():
+        d = doc()
+        y = pg.evaluate(f"(() => {{ const d = new Date('{TODAY}T12:00:00'); d.setDate(d.getDate()-2); const p = n => String(n).padStart(2,'0'); return `${{d.getFullYear()}}-${{p(d.getMonth()+1)}}-${{p(d.getDate())}}`; }})()")
+        d['tasks'].append({"id": "overdue-theme", "title": "Просроченная для проверки цветов", "plan": {"kind": "day", "date": y}, "time": None, "reminder": None,
+                           "deadline": None, "projectId": None, "done": False, "completedAt": None,
+                           "createdAt": "2026-10-01T10:00:00.000Z", "updatedAt": "2026-10-01T10:00:00.000Z", "deletedAt": None})
+        pg.evaluate("d => localStorage.setItem('organizer:data', JSON.stringify(d))", d)
+        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        keys_before = pg.evaluate("['organizer:data','organizer:snapshots','organizer:device'].map(k => localStorage.getItem(k))")
+        pg.click('#settings-btn')
+        check('Настройки: открываются кнопкой в шапке, три варианта оформления', 'Оформление' in main_text() and pg.locator('button.choice').count() == 3)
+        check('Настройки: по умолчанию «Как в системе»', pg.inner_text('button.choice.active').startswith('Как в системе'))
+        for mode, scheme in (('light', 'dark'), ('dark', 'light'), ('system', 'dark'), ('system', 'light')):
+            pg.emulate_media(color_scheme=scheme)
+            pg.click('#settings-btn')
+            pg.click(f'button.choice[data-mode="{mode}"]')
+            dark = mode == 'dark' or (mode == 'system' and scheme == 'dark')
+            label = f'«{mode}» при системной теме {scheme}'
+            bg = pg.evaluate("getComputedStyle(document.body).backgroundColor")
+            check(f'Оформление {label}: фон {"тёмный" if dark else "светлый тёплый"}', bg == ('rgb(27, 26, 24)' if dark else 'rgb(242, 238, 230)'), bg)
+            check(f'Оформление {label}: поля даты, списки и флажки в той же схеме', pg.evaluate("getComputedStyle(document.documentElement).colorScheme") == ('dark' if dark else 'light'))
+            issues = []
+            for name in ['Сегодня', 'Календарь', 'Задачи', 'Прогресс', 'Списки', 'Данные']:
+                tab(name)
+                if name == 'Данные':
+                    pg.click('button[data-action="backup.toggleText"]')
+                    pg.click('details summary')
+                    pg.set_input_files('input[data-action="import.file"]', backup_path)
+                    pg.wait_for_selector('button[data-action="import.apply"]', timeout=5000)
+                issues += [f'{name}: {i}' for i in pg.evaluate(AUDIT_JS)]
+                if name == 'Данные':
+                    pg.click('button[data-action="import.cancel"]')
+                    pg.click('button[data-action="backup.toggleText"]')
+                if mode != 'system' and name in ('Сегодня', 'Данные', 'Прогресс'):
+                    pg.screenshot(path=os.path.join(OUT, f'theme-{mode}-{name}.png'), full_page=True)
+            pg.click('#settings-btn')
+            issues += [f'Настройки: {i}' for i in pg.evaluate(AUDIT_JS)]
+            # every message style (info / warning / error banners, backup note, error in a card)
+            pg.evaluate("""() => { document.getElementById('banners').innerHTML =
+              '<div class="banner info line"><span class="grow">Информация</span><button class="icon">×</button></div>' +
+              '<div class="banner warn line"><span class="grow">Предупреждение</span><button class="icon">×</button></div>' +
+              '<div class="banner error"><b>Ошибка:</b> текст <div class="line"><button>Повторить</button></div></div>' +
+              '<div class="card note line"><span class="grow">Напоминание о копии</span><button>Сохранить копию</button></div>' +
+              '<div class="card"><p class="bad">Красный текст</p><p class="is-done"><span class="title">Готово</span></p><button class="danger">Заменить данные</button></div>'; }""")
+            issues += [f'Сообщения: {i}' for i in pg.evaluate(AUDIT_JS)]
+            pg.evaluate("document.getElementById('banners').innerHTML = ''")
+            if mode != 'system':
+                pg.screenshot(path=os.path.join(OUT, f'theme-{mode}-Настройки.png'), full_page=True)
+            check(f'Оформление {label}: контраст текста ≥ 4.5:1 и нет ярко-белого фона на всех экранах (с баннерами, разбором, импортом)', not issues, '; '.join(issues[:6]))
+        pg.emulate_media(color_scheme='dark')
+        pg.click('button.choice[data-mode="system"]')
+        pg.emulate_media(color_scheme='light')
+        check('«Как в системе»: смена темы iPhone применяется сразу, без перезапуска', pg.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(242, 238, 230)')
+        pg.click('button.choice[data-mode="dark"]')
+        check('Тёмное: цвет строки состояния тоже тёмный', pg.evaluate("[...document.querySelectorAll('meta[name=theme-color]')].map(m => m.content)") == ['#1b1a18', '#1b1a18'])
+        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        check('Выбор сохраняется после перезапуска', pg.evaluate("document.documentElement.dataset.theme") == 'dark' and pg.evaluate("localStorage.getItem('organizer:appearance')") == 'dark')
+        pg.click('#settings-btn')
+        check('После перезапуска в настройках отмечено «Тёмное»', pg.inner_text('button.choice.active').startswith('Тёмное'))
+        keys_after = pg.evaluate("['organizer:data','organizer:snapshots','organizer:device'].map(k => localStorage.getItem(k))")
+        check('Смена оформления не изменила данные, автокопии и сведения устройства', keys_before == keys_after)
+        pg.click('button.choice[data-mode="system"]')
+        pg.emulate_media(color_scheme='light')
+
     @step('Ошибка сохранения')
     def _():
         pg.evaluate("""() => { const orig = Storage.prototype.setItem; window.__failSave = true;
@@ -369,6 +471,20 @@ with sync_playwright() as p:
         p4.wait_for_function('window.__organizerReady === true')
         check('Safari на iPhone (не установлено): предупреждение о раздельных данных', 'раздельные данные' in p4.inner_text('#banners'))
         c4.close()
+
+    # ---- the saved theme applies before the app code runs (no flash) ----
+    @step('Оформление без мигания')
+    def _():
+        c5 = browser.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light')
+        p5 = c5.new_page()
+        p5.goto(BASE + 'tests.css')
+        p5.evaluate("localStorage.setItem('organizer:appearance', 'dark')")
+        p5.route('**/app.js', lambda route: route.abort())
+        p5.goto(BASE)
+        p5.wait_for_load_state('load')
+        check('Сохранённое «Тёмное» применяется ещё до запуска кода приложения (нет вспышки светлого)',
+              p5.evaluate("document.documentElement.dataset.theme") == 'dark' and p5.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(27, 26, 24)')
+        c5.close()
 
     # ---- fresh context with a fake clock: "today" rolls over at midnight ----
     @step('Смена дня')
