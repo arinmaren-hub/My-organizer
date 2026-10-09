@@ -2,50 +2,47 @@
 // records, quarantine, rescued raw data and storage information.
 
 import { esc } from './util.js';
-import { formatStamp } from './dates.js';
+import { t, msg, has, formatStamp, sizeText } from './i18n.js';
 import { SCHEMA_VERSION } from './schema.js';
 import { APP_VERSION } from './version.js';
 import { deletedRecords } from './selectors.js';
 import { empty } from './components.js';
 
-const REASONS = {
-  daily: 'ежедневная',
-  'before-import': 'перед импортом',
-  'before-restore': 'перед восстановлением',
-  manual: 'вручную'
-};
-
-const counts = c => c ? `задач ${c.tasks}, событий ${c.events}, проектов ${c.projects}, списков ${c.lists}` : 'не читается';
-
-const kb = bytes => bytes == null ? '—' : bytes < 1024 ? `${bytes} Б` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} КБ` : `${(bytes / 1048576).toFixed(1)} МБ`;
+const counts = c => (c ? t('counts', c) : t('counts.unreadable'));
+// Snapshot reasons: known ones are translated, anything else is shown as stored.
+const reasonText = r => (has(`snap.${r}`) ? t(`snap.${r}`) : typeof r === 'string' ? r : '');
+// Quarantine entries come from data files: only plain text is shown from them.
+const plain = v => (typeof v === 'string' ? v : '');
 
 function importSection(ui) {
   let preview = '';
-  if (ui.importError) preview = `<div class="banner error">${esc(ui.importError)}</div>`;
+  if (ui.importError) preview = `<div class="banner error">${esc(msg(ui.importError))}</div>`;
   if (ui.importPreview) {
     const p = ui.importPreview;
     preview += `
       <div class="banner info">
-        <p><b>Файл проверен.</b> ${p.meta.exportedAt ? `Копия от ${esc(formatStamp(p.meta.exportedAt))}. ` : ''}В нём: ${esc(counts(p.counts))}.
-        ${p.quarantined ? `<br>${p.quarantined} запис(ь/и) не прошли проверку и попадут в карантин (не потеряются).` : ''}</p>
-        <p>Текущие данные будут <b>заменены</b>. Перед заменой сохраняется автокопия текущего состояния.</p>
+        <p><b>${esc(t('data.checked'))}</b> ${p.meta.exportedAt ? `${esc(t('data.copyFrom', { at: { $stamp: p.meta.exportedAt } }))} ` : ''}${esc(t('data.contains', { counts: counts(p.counts) }))}
+        ${p.quarantined ? `<br>${esc(t('data.willQuarantine', { n: p.quarantined }))}` : ''}</p>
+        ${p.replacesData && p.origin === 'other' ? `<p class="bad"><b>${esc(t('data.originOther'))}</b></p>` : ''}
+        ${p.replacesData && p.origin === 'unknown' ? `<p>${esc(t('data.originUnknown'))}</p>` : ''}
+        <p>${esc(t('data.willReplace1'))} <b>${esc(t('data.willReplace2'))}</b>${esc(t('data.willReplace3'))}</p>
         <div class="line">
-          <button type="button" class="danger" data-action="import.apply">Заменить данные</button>
-          <button type="button" data-action="import.cancel">Отмена</button>
+          <button type="button" class="danger" data-action="import.apply">${esc(t('data.replace'))}</button>
+          <button type="button" data-action="import.cancel">${esc(t('btn.cancel'))}</button>
         </div>
       </div>`;
   }
   return `
     <section class="card">
-      <h2>Восстановить из копии</h2>
-      <label class="filebtn">Выбрать файл копии…
+      <h2>${esc(t('data.restoreTitle'))}</h2>
+      <label class="filebtn">${esc(t('data.chooseFile'))}
         <input type="file" accept=".json,application/json,text/plain" data-action="import.file">
       </label>
       <details>
-        <summary>Или вставить текст копии</summary>
+        <summary>${esc(t('data.pasteSummary'))}</summary>
         <form data-form="import.paste">
-          <textarea name="text" rows="4" placeholder="Вставьте сюда текст резервной копии"></textarea>
-          <button type="submit">Проверить</button>
+          <textarea name="text" rows="4" placeholder="${esc(t('data.pastePh'))}"></textarea>
+          <button type="submit">${esc(t('data.check'))}</button>
         </form>
       </details>
       ${preview}
@@ -60,87 +57,90 @@ export function renderData(doc, ctx) {
   const deleted = deletedRecords(doc);
   const rescue = store.rescueList();
   const info = ui.storageInfo || {};
+  const persist = info.persisted === true ? 'persist.yes' : info.persisted === false ? 'persist.no' : 'persist.unknown';
 
   let h = `
     <section class="card">
-      <h2>Сохранение</h2>
-      ${st.readOnly ? `<p class="bad">Только чтение: ${esc(st.readOnlyReason)}</p>` : ''}
-      ${st.blockedRaw ? `<button type="button" data-action="blocked.download">Скачать исходные данные</button>` : ''}
-      ${st.saveError ? `<p class="bad">Последнее сохранение не удалось: ${esc(st.saveError)}.</p><button type="button" data-action="save.retry">Повторить сохранение</button>` : ''}
-      <p class="muted">${st.lastSavedAt ? `Последнее сохранение: ${esc(formatStamp(st.lastSavedAt))}` : 'В этом сеансе изменений ещё не было.'}</p>
+      <h2>${esc(t('data.save'))}</h2>
+      ${st.readOnly ? `<p class="bad">${esc(t('data.readOnly', { reason: st.readOnlyReason }))}</p>` : ''}
+      ${st.blockedRaw ? `<div class="line"><button type="button" data-action="blocked.download">${esc(t('data.downloadRaw'))}</button>
+        ${st.stopped === 'ro.upgradeNoCopy' ? `<button type="button" data-action="upgrade.continue">${esc(t('data.continueUpgrade'))}</button>` : ''}</div>` : ''}
+      ${st.saveError ? `<p class="bad">${esc(t('data.saveFailed', { reason: st.saveError }))}</p><button type="button" data-action="save.retry">${esc(t('data.retrySave'))}</button>` : ''}
+      <p class="muted">${esc(st.lastSavedAt ? t('data.lastSaved', { at: { $stamp: st.lastSavedAt } }) : t('data.noChanges'))}</p>
     </section>
 
     <section class="card">
-      <h2>Резервная копия</h2>
-      <p>Данные хранятся только на этом устройстве. Сохраняй копию в «Файлы» / iCloud Drive хотя бы раз в неделю.</p>
-      <p class="muted">${last ? `Последняя копия: ${esc(formatStamp(last))}` : 'Копий с этого устройства ещё не было.'}</p>
+      <h2>${esc(t('data.backup'))}</h2>
+      <p>${esc(t('data.backupInfo'))}</p>
+      <p class="muted">${esc(last ? t('data.lastBackup', { at: { $stamp: last } }) : t('data.noBackup'))}</p>
       <div class="line">
-        <button type="button" class="primary" data-action="backup.export">Сохранить копию</button>
-        <button type="button" data-action="backup.toggleText">${ui.showJson ? 'Скрыть текст копии' : 'Показать текст копии'}</button>
+        <button type="button" class="primary" data-action="backup.export">${esc(t('btn.saveBackup'))}</button>
+        <button type="button" data-action="backup.toggleText">${esc(t(ui.showJson ? 'data.hideText' : 'data.showText'))}</button>
       </div>
       ${ui.showJson ? `
-        <p class="muted small">Запасной способ: скопируйте текст и вставьте, например, в Заметки.</p>
+        <p class="muted small">${esc(t('data.textHint'))}</p>
         <textarea class="json" readonly rows="8">${esc(backupText())}</textarea>
-        <button type="button" data-action="backup.copy">Скопировать текст</button>` : ''}
+        <button type="button" data-action="backup.copy">${esc(t('data.copyText'))}</button>` : ''}
     </section>
 
     ${importSection(ui)}
 
     <section class="card">
-      <h2>Автокопии</h2>
-      <p class="muted small">Создаются автоматически раз в день и перед импортом или восстановлением. Хранятся на этом же устройстве (до 10 штук), поэтому не заменяют экспорт.</p>
+      <h2>${esc(t('data.snapshots'))}</h2>
+      <p class="muted small">${esc(t('data.snapshotsInfo'))}</p>
       ${snaps.length ? snaps.map(s => `
         <div class="row">
-          <div class="grow">${esc(formatStamp(s.at))} · ${esc(REASONS[s.reason] || s.reason)}<div class="muted small">${esc(counts(s.counts))}</div>
+          <div class="grow">${esc(formatStamp(s.at))} · ${esc(reasonText(s.reason))}<div class="muted small">${esc(counts(s.counts))}</div>
             <div class="moves">
-              <button type="button" data-action="snapshot.restore" data-id="${esc(s.id)}"${s.ok ? '' : ' disabled'}>Восстановить</button>
-              <button type="button" data-action="snapshot.download" data-id="${esc(s.id)}" data-at="${esc(s.at)}">Скачать</button>
+              <button type="button" data-action="snapshot.restore" data-id="${esc(s.id)}"${s.ok ? '' : ' disabled'}>${esc(t('btn.restore'))}</button>
+              <button type="button" data-action="snapshot.download" data-id="${esc(s.id)}" data-at="${esc(s.at)}">${esc(t('btn.download'))}</button>
             </div>
           </div>
-        </div>`).join('') : empty('Автокопий пока нет')}
+        </div>`).join('') : empty(t('data.noSnapshots'))}
     </section>
 
     <section class="card">
-      <h2>Удалённые (30 дней)</h2>
+      <h2>${esc(t('data.deleted'))}</h2>
       ${deleted.length ? deleted.map(r => `
         <div class="row">
-          <div class="grow">${esc(r.kind)}: ${esc(r.label)}<div class="muted small">удалено ${esc(formatStamp(r.deletedAt))}</div></div>
-          <button type="button" data-action="restore" data-collection="${esc(r.collection)}" data-id="${esc(r.id)}">Восстановить</button>
-        </div>`).join('') : empty('Ничего не удалено')}
+          <div class="grow">${esc(t(`kind.${r.collection}`))}: ${esc(r.label)}<div class="muted small">${esc(t('data.deletedAt', { at: { $stamp: r.deletedAt } }))}</div></div>
+          <button type="button" data-action="restore" data-collection="${esc(r.collection)}" data-id="${esc(r.id)}">${esc(t('btn.restore'))}</button>
+        </div>`).join('') : empty(t('data.nothingDeleted'))}
     </section>`;
 
   if (doc.quarantine.length) {
     h += `
     <section class="card">
-      <h2>Карантин · ${doc.quarantine.length}</h2>
-      <p class="muted small">Записи, которые не прошли проверку при загрузке или импорте. Они не показываются, но сохраняются и попадают в каждую резервную копию.</p>
-      ${doc.quarantine.slice(0, 20).map(q => `<div class="row"><div class="grow small">${esc(q.collection || '?')}: ${esc(q.reason || '')}<div class="muted small">${esc(q.at ? formatStamp(q.at) : '')}</div></div></div>`).join('')}
-      <button type="button" data-action="quarantine.download">Скачать карантин</button>
+      <h2>${esc(t('data.quarantine', { n: doc.quarantine.length }))}</h2>
+      <p class="muted small">${esc(t('data.quarantineInfo'))}</p>
+      ${doc.quarantine.slice(0, 20).map(q => `<div class="row"><div class="grow small">${esc(plain(q.collection) || '?')}: ${esc(t(plain(q.reason)))}<div class="muted small">${esc(plain(q.at) ? formatStamp(q.at) : '')}</div></div></div>`).join('')}
+      <button type="button" data-action="quarantine.download">${esc(t('data.quarantineDownload'))}</button>
     </section>`;
   }
 
   if (rescue.length) {
     h += `
     <section class="card">
-      <h2>Повреждённые данные</h2>
-      <p class="muted small">Исходный текст, который не удалось прочитать. Сохранён как есть, чтобы его можно было восстановить вручную.</p>
+      <h2>${esc(t('data.damaged'))}</h2>
+      <p class="muted small">${esc(t('data.damagedInfo'))}</p>
       ${rescue.map((r, i) => `
         <div class="row">
-          <div class="grow">${esc(formatStamp(r.at))} · ${esc(r.reason)}<div class="muted small">${esc(kb(String(r.raw || '').length))}</div></div>
-          <button type="button" data-action="rescue.download" data-index="${i}">Скачать</button>
+          <div class="grow">${esc(formatStamp(r.at))} · ${esc(t(plain(r.reason)))}<div class="muted small">${esc(sizeText(plain(r.raw).length))}</div></div>
+          <button type="button" data-action="rescue.download" data-index="${i}">${esc(t('btn.download'))}</button>
         </div>`).join('')}
     </section>`;
   }
 
   h += `
     <section class="card">
-      <h2>О приложении</h2>
+      <h2>${esc(t('data.about'))}</h2>
+      <p class="small">${esc(t('data.privacy', { address: ctx.address || '' }))}</p>
       <p class="muted small">
-        Версия ${esc(APP_VERSION)} · схема данных ${SCHEMA_VERSION}<br>
-        Запущено с экрана «Домой»: ${ui.standalone ? 'да' : 'нет'}<br>
-        Офлайн-режим: ${esc(ui.swState || 'не активен')}<br>
-        Постоянное хранилище: ${info.persisted === true ? 'разрешено' : info.persisted === false ? 'не разрешено браузером' : 'неизвестно'}<br>
-        Занято: ${esc(kb(info.usage))}${info.quota ? ` из ${esc(kb(info.quota))}` : ''}
+        ${esc(t('data.version', { v: APP_VERSION, s: SCHEMA_VERSION }))}<br>
+        ${esc(t('data.standalone', { yn: { $t: ui.standalone ? 'yes' : 'no' } }))}<br>
+        ${esc(t('data.offline', { state: ui.swState ? msg(ui.swState) : t('sw.inactive') }))}<br>
+        ${esc(t('data.persist', { state: { $t: persist } }))}<br>
+        ${esc(info.quota ? t('data.usedOf', { used: sizeText(info.usage), quota: sizeText(info.quota) }) : t('data.used', { used: sizeText(info.usage) }))}
       </p>
     </section>`;
   return h;

@@ -4,10 +4,12 @@
 
 export const KEYS = {
   data: 'organizer:data',            // the main document (schema v2+)
-  snapshots: 'organizer:snapshots',  // automatic safety copies, newest first
+  snapshots: 'organizer:snapshots',  // daily automatic copies (one per day, latest 5), newest first
+  rollback: 'organizer:rollback',    // copies taken before upgrades, imports and restores (latest 5)
   rescue: 'organizer:rescue',        // raw text that could not be read, kept untouched
   device: 'organizer:device',        // per-device info: last backup, last daily copy
   appearance: 'organizer:appearance',// per-device look: 'system' | 'light' | 'dark' (boot.js reads it too)
+  language: 'organizer:language',    // per-device interface language: 'ru' | 'en' (boot.js reads it too)
   legacy: 'arina-organizer-v1'       // the first prototype's key (read, never written)
 };
 
@@ -23,7 +25,7 @@ export function createLocalStorageAdapter() {
   } catch (e) {
     initError = e;
   }
-  const ensure = () => { if (!ls) throw initError || new Error('localStorage недоступен'); };
+  const ensure = () => { if (!ls) throw initError || new Error('localStorage unavailable'); };
   return {
     get(key) { ensure(); return ls.getItem(key); },
     set(key, value) {
@@ -32,7 +34,7 @@ export function createLocalStorageAdapter() {
       if (ls.getItem(key) !== value) {
         // Something was written, but not what we asked for. store.js puts the
         // previous version back when it sees this error.
-        const e = new Error('запись не подтвердилась при проверке');
+        const e = new Error('write could not be confirmed');
         e.name = 'VerifyError';
         throw e;
       }

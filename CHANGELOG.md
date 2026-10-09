@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0 — 2026-10-09 — Language, personal planning day, data preservation and privacy
+
+**New: interface language**
+- Russian or English, chosen by hand on the first-launch screen and in «Настройки» → «Язык». Russian is the default; the device language is never detected. Saved on this device only (`organizer:language`) and applied before the page is drawn.
+- Every interface text, plural form, weekday and month name is in `i18n.js`. Messages saved by the app (notices, reasons) are stored as keys, so they switch language too. Texts you typed are never translated.
+
+**New: personal planning day**
+- First-launch screen: language, usual wake-up time, bedtime, and «День заканчивается в» (your bedtime is suggested). «Пропустить» keeps the day ending at 00:00, exactly as before. Existing users see it once after the update.
+- «Сегодня», the morning review, overdue detection and «на сегодня» in quick add follow your planning day: with the day ending at 03:00, Saturday 01:30 is still Friday, and Friday's tasks become overdue only at 03:00. A day ending at 23:00 already shows Saturday at 23:30.
+- Real dates never change: event times, deadlines and timestamps stay on the calendar. Events after midnight appear in the planning day's schedule with their real date; «По календарю: …» is shown when the dates differ.
+- «Завершить день»: move to the next day early (after a confirmation); «Вернуть» undoes it. Stored on this device only; changes no data.
+- «Настройки» → «Мой день» to change the times at any time.
+- Daylight-saving nights: the day changes exactly once and never goes back.
+
+**Data preservation (owner's release rules R1–R12)**
+- Two kinds of automatic copies: **daily** (one per day, latest 5) and **rollback** copies before every data-format upgrade, import and restore (latest 5). The newest pre-upgrade copy keeps the exact original text and is never rotated out by imports or restores. Copies made by 0.2.x are all kept (import/restore copies move to the rollback list).
+- **Guarded upgrade:** before old data is rewritten, the app checks that every record survived (same id, title and done state; quarantine kept) and saves the exact original text. If either fails, or the upgrade code fails, nothing is written: the app opens read-only, shows what it could read, and offers «Скачать исходные данные» (and «Продолжить обновление без копии» when only space was missing).
+- A message tells you when your data was moved to the new format, and where the previous copy is.
+- A backup or copy made before 0.3.0 keeps your current day settings instead of asking the first-launch questions again.
+
+**Privacy (owner's requirements, see `SECURITY.md`)**
+- Each organizer has a random id (`dataId`, not personal). A backup from **another organizer** that would replace your data shows a warning and needs a second confirmation; your data is kept as a rollback copy first.
+- Hardening: odd values in an imported file (e.g. `constructor`, `__proto__`, objects where text is expected) can no longer break a screen; backup-file headers are read as plain text only.
+- «Данные → О приложении» states that data stays in this browser on this device, and shows the address it belongs to.
+- New `SECURITY.md`: guarantees, limitations, tests. README: publish the app on its own address (origin) before sharing it.
+
+**Fixed**
+- At midnight, a screen whose planning day did not change was not redrawn, so the calendar-date hint and event labels could be a day behind until the next action.
+
+**Data format:** schema 3 — `settings.day = { wake, bed, cutoff, setupDone }` and `dataId`. Upgrades from the prototype (1) and from 0.2.0–0.2.2 (2) are automatic and keep every record. New keys: `organizer:language`, `organizer:rollback`.
+
+**Tests:** see `TESTING.md` — unit tests in three time zones, click-through in both languages and both themes, a two-browser privacy test, and real-update upgrade tests from 0.2.0, 0.2.1 and 0.2.2.
+
 ## 0.2.2 — 2026-10-09 — Appearance: light, dark, system
 
 **New**

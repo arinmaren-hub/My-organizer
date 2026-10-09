@@ -4,8 +4,11 @@ const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&
 
 // Escape any value for safe use inside HTML text or a quoted attribute.
 // Every piece of user or file data that goes into innerHTML must pass through this.
+// Never throws, even for odd values from an imported file.
 export function esc(value) {
-  return String(value ?? '').replace(/[&<>"']/g, c => ESCAPES[c]);
+  let s;
+  try { s = String(value ?? ''); } catch { s = ''; }
+  return s.replace(/[&<>"']/g, c => ESCAPES[c]);
 }
 
 // Random unique id, safe for HTML attributes (letters, digits, dashes).

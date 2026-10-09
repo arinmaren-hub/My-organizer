@@ -25,7 +25,7 @@ export function readAppearance(storage) {
 // Returns true when the choice is saved; false when it could not be written
 // (it still applies until the app is closed).
 export function saveAppearance(storage, mode) {
-  if (!MODES.includes(mode)) throw new Error('неизвестный режим оформления');
+  if (!MODES.includes(mode)) throw new Error('unknown appearance mode');
   try {
     storage.set(KEYS.appearance, mode);
     return true;

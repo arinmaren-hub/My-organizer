@@ -53,10 +53,10 @@ export const activeLists = doc => doc.lists.filter(alive);
 // Every soft-deleted record, newest deletion first, for the restore list.
 export function deletedRecords(doc) {
   const out = [];
-  for (const t of doc.tasks) if (t.deletedAt) out.push({ collection: 'tasks', id: t.id, label: t.title, kind: 'Задача', deletedAt: t.deletedAt });
-  for (const e of doc.events) if (e.deletedAt) out.push({ collection: 'events', id: e.id, label: e.title, kind: 'Событие', deletedAt: e.deletedAt });
-  for (const p of doc.projects) if (p.deletedAt) out.push({ collection: 'projects', id: p.id, label: p.name, kind: 'Проект', deletedAt: p.deletedAt });
-  for (const l of doc.lists) if (l.deletedAt) out.push({ collection: 'lists', id: l.id, label: l.name, kind: 'Список', deletedAt: l.deletedAt });
+  for (const t of doc.tasks) if (t.deletedAt) out.push({ collection: 'tasks', id: t.id, label: t.title, deletedAt: t.deletedAt });
+  for (const e of doc.events) if (e.deletedAt) out.push({ collection: 'events', id: e.id, label: e.title, deletedAt: e.deletedAt });
+  for (const p of doc.projects) if (p.deletedAt) out.push({ collection: 'projects', id: p.id, label: p.name, deletedAt: p.deletedAt });
+  for (const l of doc.lists) if (l.deletedAt) out.push({ collection: 'lists', id: l.id, label: l.name, deletedAt: l.deletedAt });
   return out.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
 }
 
@@ -90,4 +90,10 @@ export function eveningPreviewDue(settings, now, lastShownFor) {
   const tomorrow = addDays(dateKey(now), 1);
   if (isDateKey(lastShownFor) && lastShownFor >= tomorrow) return null;
   return tomorrow;
+}
+
+// Events inside a planning-day window [start, end) — see planday.js → dayWindow.
+// With cutoff 00:00 this is exactly eventsForDay().
+export function eventsInWindow(doc, { start, end }) {
+  return activeEvents(doc).filter(e => e.start >= start && e.start < end);
 }

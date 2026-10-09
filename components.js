@@ -1,57 +1,58 @@
 // Small pieces of HTML shared by several screens. Every dynamic value goes
-// through esc(). Buttons carry data-action / data-id; app.js handles them.
+// through esc(); every interface text comes from i18n.js. Buttons carry
+// data-action / data-id; app.js handles them.
 
 import { esc } from './util.js';
-import { formatDay } from './dates.js';
+import { t, formatDay } from './i18n.js';
 
-export const empty = (text = 'Пока пусто') => `<p class="muted">${esc(text)}</p>`;
+export const empty = (text = t('empty')) => `<p class="muted">${esc(text)}</p>`;
 
-export function planLabel(t) {
-  if (t.plan.kind === 'day') return formatDay(t.plan.date);
-  if (t.plan.kind === 'week') return 'Неделя с ' + formatDay(t.plan.date);
-  return 'Без даты';
+export function planLabel(task) {
+  if (task.plan.kind === 'day') return formatDay(task.plan.date);
+  if (task.plan.kind === 'week') return t('plan.week', { day: { $day: task.plan.date } });
+  return t('plan.none');
 }
 
-export function taskRow(t, { withMove = false } = {}) {
-  const meta = [planLabel(t)];
-  if (t.time) meta.push(t.time);
-  if (t.deadline) meta.push('дедлайн ' + formatDay(t.deadline));
-  const id = esc(t.id);
+export function taskRow(task, { withMove = false } = {}) {
+  const meta = [planLabel(task)];
+  if (task.time) meta.push(task.time);
+  if (task.deadline) meta.push(t('task.deadline', { day: { $day: task.deadline } }));
+  const id = esc(task.id);
   const move = withMove ? `
       <div class="moves">
-        <button type="button" data-action="task.move" data-id="${id}" data-kind="day">Сегодня</button>
-        <button type="button" data-action="task.move" data-id="${id}" data-kind="week">На неделю</button>
-        <button type="button" data-action="task.move" data-id="${id}" data-kind="none">Без даты</button>
+        <button type="button" data-action="task.move" data-id="${id}" data-kind="day">${esc(t('move.today'))}</button>
+        <button type="button" data-action="task.move" data-id="${id}" data-kind="week">${esc(t('move.week'))}</button>
+        <button type="button" data-action="task.move" data-id="${id}" data-kind="none">${esc(t('move.none'))}</button>
       </div>` : '';
   return `
-    <div class="row${t.done ? ' is-done' : ''}">
-      <input type="checkbox" data-action="task.toggle" data-id="${id}" ${t.done ? 'checked' : ''} aria-label="Готово">
-      <div class="grow"><div class="title">${esc(t.title)}</div><div class="muted small">${esc(meta.join(' · '))}</div>${move}</div>
-      <button type="button" class="icon" data-action="task.delete" data-id="${id}" aria-label="Удалить">×</button>
+    <div class="row${task.done ? ' is-done' : ''}">
+      <input type="checkbox" data-action="task.toggle" data-id="${id}" ${task.done ? 'checked' : ''} aria-label="${esc(t('aria.done'))}">
+      <div class="grow"><div class="title">${esc(task.title)}</div><div class="muted small">${esc(meta.join(' · '))}</div>${move}</div>
+      <button type="button" class="icon" data-action="task.delete" data-id="${id}" aria-label="${esc(t('btn.delete'))}">×</button>
     </div>`;
 }
 
 export function taskList(tasks, opts) {
-  return tasks.length ? tasks.map(t => taskRow(t, opts)).join('') : empty();
+  return tasks.length ? tasks.map(task => taskRow(task, opts)).join('') : empty();
 }
 
 // Quick entry: only the text is required. `q` is the remembered draft.
 export function quickAdd(q, today) {
   const kind = q.kind || 'none';
-  const opt = (v, label) => `<option value="${v}"${kind === v ? ' selected' : ''}>${label}</option>`;
+  const opt = (v, key) => `<option value="${v}"${kind === v ? ' selected' : ''}>${esc(t(key))}</option>`;
   return `
     <section class="card">
-      <h3>Быстро добавить</h3>
+      <h3>${esc(t('quick.title'))}</h3>
       <form data-form="task.quickAdd" autocomplete="off">
-        <textarea name="text" rows="3" placeholder="Одно дело на строку">${esc(q.text)}</textarea>
+        <textarea name="text" rows="3" placeholder="${esc(t('quick.placeholder'))}">${esc(q.text)}</textarea>
         <div class="line">
-          <select name="kind" data-action="quick.kind" aria-label="Когда">
-            ${opt('none', 'Без даты')}${opt('day', 'На день')}${opt('week', 'На неделю')}
+          <select name="kind" data-action="quick.kind" aria-label="${esc(t('quick.when'))}">
+            ${opt('none', 'quick.kind.none')}${opt('day', 'quick.kind.day')}${opt('week', 'quick.kind.week')}
           </select>
-          <input name="date" type="date" value="${esc(q.date || today)}" aria-label="Дата"${kind === 'none' ? ' hidden' : ''}>
-          <button type="submit" class="primary">Добавить</button>
+          <input name="date" type="date" value="${esc(q.date || today)}" aria-label="${esc(t('quick.date'))}"${kind === 'none' ? ' hidden' : ''}>
+          <button type="submit" class="primary">${esc(t('btn.add'))}</button>
         </div>
-        <div class="muted small">Можно вставить сразу несколько строк. Дата необязательна.</div>
+        <div class="muted small">${esc(t('quick.hint'))}</div>
       </form>
     </section>`;
 }

@@ -3,7 +3,7 @@
 This file is the single list of rules for the app. Both AIs (ChatGPT and Claude) and the owner follow it.
 A rule changes only when this file is edited on purpose, with the date and the reason.
 
-Last updated: 2026-10-09 (appearance update, app version 0.2.2)
+Last updated: 2026-10-09 (app version 0.3.0: language, planning day, privacy rules P1–P8, data-preservation release rules R1–R12)
 
 ---
 
@@ -18,8 +18,26 @@ Last updated: 2026-10-09 (appearance update, app version 0.2.2)
 | 5 | Tasks can have an **optional time and an optional reminder**. | Data model ready (`task.time`, `task.reminder`). No UI yet. |
 | 6 | **Planned date and deadline are separate.** Rescheduling never silently changes a deadline. | Implemented: `moveTask` changes only `plan` (and clears `time`/`reminder` when the task is no longer on a specific day). Covered by an automated test. |
 | 7 | Unfinished tasks are **never automatically rescheduled**. The user decides during the morning review. | Implemented: nothing moves without a tap. |
-| 8 | The app works **without AI, paid APIs, accounts or cloud sync**. | Implemented. No network requests except loading the app's own files. |
+| 8 | The app works **without AI, paid APIs, accounts or cloud sync**. | Implemented. No network requests except loading the app's own files (checked by tests; see `SECURITY.md`). |
 | 9 | All data is stored **locally on one device**, with **safe backup and restore**. | Implemented: versioned store, automatic copies, export/import with preview, see section C. |
+
+---
+
+## A2. Confirmed requirements — second batch (owner, 2026-10-09)
+
+| # | Requirement | Design | Planned release (see `ROADMAP.md`) |
+|---|---|---|---|
+| 10 | **Personal day boundary and onboarding**: wake-up time, bedtime, a personal planning-day cutoff; real dates stay accurate | B4 | **0.3.0 — implemented** |
+| 11 | **Evening review of unfinished tasks** together with Tomorrow's Summary; never reschedule without confirmation; no repeated questions in the morning | B5 | S4 |
+| 12 | **Recurring tasks**: daily, weekly, monthly, yearly and completion-relative; completion history; no duplicates | B6 | S8 |
+| 13 | **Waiting for Others** («Ожидаю действия от других») at the very bottom of «Сегодня», with follow-up dates and «решено» | B7 | S6 |
+| 14 | **Reusable list templates** with editable categories and items (Supermarket, Suitcase Packing, own templates) | B8 | S7 |
+| 15 | **Interface language: Russian or English, chosen manually** | B9 | **0.3.0 — implemented** |
+| 16 | Keep all existing data and functions; no AI or paid APIs; tests especially for overnight dates, recurrence and migration; **small releases, each approved before the next** | E9–E11 | all |
+| 17 | **Privacy and data isolation** (owner, 2026-10-09): each person's records stay separate; nothing is shared automatically; the app creator cannot reach other people's records through the app; no personal data goes to GitHub or any server; importing someone else's backup always needs explicit confirmation. No accounts, sync, analytics or paid services. Documented in `SECURITY.md`, without claiming absolute security. | G | 0.3.0 and every later release |
+| 18 | **Data preservation on every update** (owner, 2026-10-09): release rules R1–R12 — they block a release when they fail | F | 0.3.0 and every later release |
+
+Items marked *(proposal — confirm)* below are design choices made by Claude that need the owner's yes or no.
 
 ---
 
@@ -45,7 +63,7 @@ Last updated: 2026-10-09 (appearance update, app version 0.2.2)
 - `selectors.js → eveningPreviewDue(settings, now, lastShownFor)` returns the day to summarise, or `null`.
 - Device key `organizer:device → lastEveningPreviewShownFor` is reserved for "already shown".
 
-**Still to build:** settings UI (on/off + time), the summary screen, the open-on-launch check, the manual button. Suggested timing: right after Phase 1, because it reuses Phase 1's review buttons and task editing.
+**Still to build:** settings UI (on/off + time), the summary screen, the open-on-launch check, the manual button. **Update (2026-10-09):** it becomes part of the «Вечер» screen together with the evening review (B5), uses the planning day (B4), and is planned for release S4.
 
 ---
 
@@ -115,6 +133,126 @@ The 30-day and 6-month ages are proposals — confirm or change.
 
 **Timing:** after Phase 3, because it depends on project status and on restoring list items and milestones. No changes now.
 
+## B4. Personal planning day and onboarding (requirement 10) — implemented in 0.3.0
+
+**Two kinds of "day"**
+- **Calendar date**: the real date on the clock.
+- **Planning day**: the day the user is living in. It ends at the user's **cutoff** («День заканчивается в»).
+  - Cutoff **before 12:00** (e.g. 03:00): the day ends after midnight, on the next calendar date. Saturday 02:30 still belongs to **Friday**.
+  - Cutoff **from 12:00 on** (e.g. 23:00): the day ends before midnight, on the same date. Friday 23:30 already belongs to **Saturday**.
+  - Cutoff **00:00**: planning day = calendar date, exactly the behaviour before 0.3.0.
+- Computed from the real moment the cutoff happens on that date (`planday.js → cutoffInstant`). On a daylight-saving night the day changes exactly once and never goes back: when the clocks go back, the first 03:30 counts; when they jump over the cutoff, the day changes at the jump. It is never computed by subtracting hours.
+
+| Uses the planning day | Uses the real calendar date and time |
+|---|---|
+| «Сегодня» (tasks, «На этой неделе», reviews) | Event times and all calendar screens |
+| Morning review and overdue detection | Deadlines (shown with their real date) |
+| Quick add and move buttons («на сегодня») | Timestamps (created, completed, deleted) |
+| The moment the screen switches to the next day (at the cutoff, **not at midnight**) | The daily automatic copy, cleanup ages, backup file names |
+| Later: evening review, recurring tasks, follow-up dates | |
+
+- **No overdue at midnight.** A task planned for Friday becomes overdue only when Friday's planning day ends at the cutoff.
+- **«Расписание» on «Сегодня»** shows the events inside the planning-day window. A 01:00 Saturday event appears under Friday on «Сегодня» with its real date («По календарю: сб, 10 окт»), and under Saturday in the calendar.
+- When the planning day and the calendar date differ, «Сегодня» says so («По календарю: …») and shows «День заканчивается в …».
+- Changing the cutoff never changes any stored date; it only changes which day the screens show.
+
+**«Завершить день» (owner, 2026-10-09).** Optional button on «Сегодня». After a confirmation the app shows the next planning day straight away (e.g. go to bed early). It moves at most one day ahead, can be undone («Вернуть») until the cutoff, and stops mattering once the cutoff passes. It changes no data: it is stored on this device only (`organizer:device → dayFinishedThrough`).
+
+**Onboarding (first launch).** One screen: interface language, usual wake-up time, usual bedtime, and «День заканчивается в».
+- **The suggested cutoff is the bedtime** (owner's decision, 2026-10-09; replaces the earlier "middle of the sleep window" proposal). It follows the bedtime as it is typed until the user changes it by hand.
+- **Skip** → cutoff 00:00 (owner's decision), i.e. the previous behaviour. Nothing is written until the user answers or skips.
+- Existing users see the same screen once after updating to 0.3.0 (their data has `setupDone: false`).
+- Editable any time in «Настройки» → «Мой день» (with «Взять время отхода ко сну»).
+- Stored in the data document (included in backups): `settings.day = { wake, bed, cutoff, setupDone }`.
+- Importing a backup or restoring a copy made **before 0.3.0** (no day settings) keeps the current day settings instead of asking again.
+- Deferred: the bedtime suggesting the evening review time (S4). Not covered: schedules where the person sleeps during the day.
+
+## B5. Evening review of unfinished tasks (requirement 11; extends B)
+
+**«Вечер» screen** = 1) review of unfinished tasks, then 2) Tomorrow's Summary (section B).
+- It opens when due, at most once per planning day, and can also be opened by hand.
+- **When due:** the chosen evening time within the planning day. Example: chosen 21:30, app opened at 01:30 with cutoff 04:00 → still Friday evening, so it shows.
+- `eveningPreviewDue()` (prepared in 0.2.0) is rewritten to this planning-day rule.
+
+**Which tasks**
+- Unfinished day tasks planned for the current planning day or earlier.
+- On the last day of the week: unfinished tasks for this week.
+- Not tasks that were already reviewed for this planning day.
+
+**Actions per task:**
+- «На завтра»
+- «Оставить дату» (keep the original planned date)
+- «Другая дата…» (date picker, or «На эту неделю»)
+- «Без даты»
+- «Готово»
+
+The deadline never changes (decision 6). Nothing moves without a tap. «Всё на завтра» exists but confirms first, with the count.
+
+**No repeated questions**
+- Each decision is recorded on the task: `review = { day, choice }`, where `day` is the planning day it was reviewed for.
+- The morning review uses the same actions and the same record:
+  - Tasks moved in the evening are not overdue, so they are not asked about.
+  - Tasks kept in the evening are listed quietly («Оставлены вчера вечером: N», expandable) instead of being asked again.
+- They come back to the next evening's review, at most once per day, so nothing is forgotten. *(proposal — confirm)*
+
+## B6. Recurring tasks (requirement 12)
+
+**Rules**
+- Every N days.
+- Every N weeks on chosen weekdays.
+- Monthly on day D. Day 31 falls on the last day of shorter months.
+- Monthly on the Nth weekday, e.g. 2nd Tuesday or last Friday.
+- Yearly on a date. 29 Feb falls on 28 Feb in common years.
+- **Completion-relative:** N days, weeks or months after the previous occurrence was completed.
+- Optional end: on a date, or after N times.
+
+**Model**
+- A **series** record holds the rule. Real tasks are **occurrences**, linked by `seriesId` + `occurrenceDate` (the date the rule produced).
+- That pair is **unique** and enforced by validation, so duplicates are impossible, even with two windows open or after an import.
+- **Generation is lazy and idempotent.** On opening and at each day change, every active series makes sure its current occurrence exists: the latest date on or before the planning day. The next date is also known for the evening summary. Running generation twice changes nothing.
+- **No pile-ups.** After days without opening the app, only the latest due occurrence becomes a task. Earlier ones are recorded in the history as «пропущено» rather than created as a stack of overdue tasks. *(proposal — confirm)*
+- **Completion-relative:** the next occurrence is created only when the current one is completed (completion's planning day + interval).
+- **History:** each series keeps `history: [{ date, status: done │ skipped │ missed, at }]`. The completion record survives even if old occurrence tasks are deleted or cleaned up (B3).
+- **Moving an occurrence** changes only its plan; its identity stays, so it is never generated again. Deleting an occurrence records «пропущено» and does not bring it back.
+- **Editing a series** changes future occurrences. The current open one changes only if the user picks «и текущую».
+- Occurrences follow the planning day (B4).
+- The same rule engine (`recurrence.js`) will later drive repeating events (Phase 2). The weekly-only `event.repeat` field is migrated then.
+
+## B7. Waiting for Others — «Ожидаю действия от других» (requirement 13)
+
+- A section at the **very bottom** of «Сегодня».
+- **Item:** what is awaited; from whom (optional); since when (automatic); optional follow-up date; optional note; optional project.
+- Waiting items are a separate collection `waiting`, not tasks, so they never count as tasks or become overdue.
+- **When the follow-up date arrives** (planning day), the item appears as an action near the top of «Сегодня»: «Напомнить: …». The choices are:
+  - «Напомнил(а) — проверить снова через …»
+  - «Решено»
+  - «Отложить до …»
+- Without a due follow-up it stays quietly at the bottom.
+- «Решено» marks it resolved: hidden and kept. It can later be a Quarterly Cleanup candidate (resolved more than 30 days ago, pre-selected).
+- **Conversions:** a task can become a waiting item («Жду ответа»), and a waiting item a task («Нужно действие»).
+
+## B8. Reusable list templates (requirement 14)
+
+- **Lists gain optional categories** (e.g. «Овощи», «Молочное»), with items grouped under them. Existing lists keep their items uncategorized.
+- **List items can be edited and deleted.** Templates need this; it was bug 10 in the assessment.
+- **Templates** are a separate collection `templates`: a name plus categories and items, with no checkmarks.
+- **Built-in templates:** «Супермаркет» / Supermarket and «Чемодан» / Suitcase Packing.
+  - They are created once, in the interface language active at that moment.
+  - They are fully editable and deletable, and never re-created after deletion.
+  - «Вернуть стандартные шаблоны» adds back any that are missing.
+- **«Новый список из шаблона»** copies categories and items with new ids, all unticked. The template itself never changes, and later edits to the list never touch it.
+- **Own templates:** «Сохранить как шаблон» from any list (copied without checkmarks), or create and edit a template from scratch.
+- Templates are never Quarterly Cleanup candidates.
+
+## B9. Interface language (requirement 15) — implemented in 0.3.0
+
+- **Russian or English**, chosen manually in onboarding and in «Настройки». Default: Russian. **No automatic detection** from the device.
+- It is a per-device preference with its own key, `organizer:language` (like appearance). It is read before the first draw and is not part of backups.
+- **All interface text lives in one file, `i18n.js`** (key → Russian/English). It includes plural rules (1 задача / 2 задачи / 5 задач; 1 task / 2 tasks) and both languages' weekday and month names. Store messages are saved as keys with values, not finished sentences, so they also switch language.
+- Text the user typed is never translated. Built-in templates use the language active when they were first created.
+- Quick entry understands Russian and English dates in either interface language (decision 2).
+- **Tests fail if** any key is missing in either language, if a raw key would show on screen, or if Russian interface text appears in code outside `i18n.js`.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure
@@ -124,8 +262,10 @@ The 30-day and 6-month ages are proposals — confirm or change.
 
 | File | Job |
 |---|---|
-| `index.html`, `app.css`, `boot.js` | Page shell, styles (light/dark tokens), early theme + "app did not start" safety message |
-| `appearance.js`, `view-settings.js` | Appearance preference and the «Настройки» screen |
+| `index.html`, `app.css`, `boot.js` | Page shell, styles (light/dark tokens), early theme and language + "app did not start" safety message |
+| `appearance.js`, `view-settings.js` | Appearance preference and the «Настройки» screen (language, «Мой день», appearance) |
+| `i18n.js` | Every interface text in Russian and English, plural rules, date words |
+| `planday.js`, `view-onboarding.js` | Planning day maths; the first-launch screen |
 | `app.js` | Starts the app, draws the current tab, routes every click/change/submit |
 | `actions.js` | Every user change as a named operation (add task, move task, delete, …) |
 | `store.js` | The only code that reads/writes app data: validation, saving, copies, recovery |
@@ -138,6 +278,8 @@ The 30-day and 6-month ages are proposals — confirm or change.
 | `sw.js`, `manifest.webmanifest`, `icon-*.png` | Installable app and offline cache |
 | `version.js` | App version (must match `sw.js`) |
 | `tests.html`, `tests.js`, `tests.css` | Automated tests (open in a browser) |
+| `e2e-test.py`, `privacy-test.py`, `upgrade-test.py` | Click-through, two-person privacy, and real-update upgrade tests (for developers) |
+| `SECURITY.md` | Privacy guarantees, their limits, and the evidence |
 
 ### Data safety rules (implemented in `store.js`)
 1. **Validate before save.** Every change is made on a copy, validated, then saved. An invalid change is rejected whole and a message is shown.
@@ -147,22 +289,32 @@ The 30-day and 6-month ages are proposals — confirm or change.
 4a. **Import and restore are all-or-nothing** (since 0.2.1). They report success only after the new data is confirmed saved. If saving fails, the previous data stays both on screen and in storage, the import preview stays available to retry, and an error explains why. Any future operation that replaces the whole document (e.g. sync) must use the same `replaceDocument()` path.
 4b. **A half-finished write is undone.** If a write cannot be confirmed by reading it back, the previously saved text is written back.
 5. **Soft delete.** Deleting sets `deletedAt`. Deleted records can be restored in «Данные → Удалённые» for 30 days, then are purged on app start.
-6. **Automatic copies** (`organizer:snapshots`): one per day (before the first change of the day), and before every import or restore. At most 10. Each copy has its own id. The copy being restored is never pushed out by the new «перед восстановлением» copy. An unreadable copies area is moved to rescue before it is ever rewritten. They live on the same device, so they do **not** replace exported backups.
+6. **Automatic copies — two kinds** (since 0.3.0, release rule R9):
+   - **Daily copies** (`organizer:snapshots`): one per calendar day (before the first change of the day), the latest **5**.
+   - **Rollback copies** (`organizer:rollback`): before every data-format upgrade, import and restore, the latest **5**. The newest pre-upgrade copy is never rotated out, and the copy being restored is never pushed out by the new «перед восстановлением» copy. A pre-upgrade copy holds the **exact original text** and never rotates anything out itself. A state that is already in a rollback copy is not copied again.
+   - **Before an import or restore would rotate out a rollback copy whose data exists in no other copy**, the app asks first (with the copy's date), so the only copy of something is never removed silently.
+   - **Nothing is removed to make room for another copy.** If a copy does not fit, it is not made: the user is told, and an import or restore asks before continuing without it.
+   - When space runs out, only **daily** copies are trimmed (to the newest 2), and only to save the main data or the pre-upgrade copy; they are put back if that still fails, and a message says so. Rollback copies are never trimmed for space. A copies list whose write half-landed is put back.
+   - 0.2.x kept import/restore copies in the daily list; on upgrade they are moved to the rollback list, none deleted.
+   - Each copy has its own id. An unreadable copies area is moved to rescue before it is ever rewritten. Copies live on the same device, so they do **not** replace exported backups.
 7. **Newer data is untouchable.** Data with a higher `schemaVersion` than the app knows makes the app read-only instead of guessing.
 8. **Other windows.** If another window saves, this one reloads the data instead of overwriting it later — unless this window holds unsaved changes, which are kept and flagged instead of being discarded.
-9. **Import is always previewed** (counts, quarantine) and confirmed; a copy of the current data is taken first.
+9. **Import is always previewed** (counts, quarantine) and confirmed; a rollback copy of the current data is taken first. A backup from a **different organizer** (its `dataId` differs) that would replace existing data shows a warning and needs a **second, separate confirmation** (enforced in `store.js`, not only in the screen).
+10. **Guarded upgrade** (since 0.3.0, rules R3 and R12). Before data in an older format is rewritten: (a) the loader checks that every record of the old data is either loaded or in quarantine, with the same id, title and done state, and that the old quarantine is kept (`schema.js → findLostRecords`); (b) the exact original text is saved as a rollback copy (old daily copies are trimmed to make room if needed). If either fails, or the upgrade code itself crashes, **nothing is written**: the app opens read-only, shows the data it could read, explains why, and offers «Скачать исходные данные». When only the copy failed (storage full), «Продолжить обновление без копии» is offered after a confirmation.
 
 ### Storage keys (`localStorage`)
 | Key | Contents |
 |---|---|
 | `organizer:data` | The main document (schema v2) |
-| `organizer:snapshots` | Automatic copies, newest first |
+| `organizer:snapshots` | Daily automatic copies (one per day, latest 5), newest first |
+| `organizer:rollback` | Rollback copies before upgrades, imports and restores (latest 5; pre-upgrade copies keep the exact original text) |
 | `organizer:rescue` | Raw text that could not be read (every distinct text is kept; nothing is dropped) |
-| `organizer:device` | This device only: `lastBackupAt`, `lastDailySnapshot`, `lastEveningPreviewShownFor` |
+| `organizer:device` | This device only: `lastBackupAt`, `lastDailySnapshot`, `dayFinishedThrough` («Завершить день»), later `lastEveningPreviewShownFor` |
 | `organizer:appearance` | This device only: `system`, `light` or `dark`. Read early by `boot.js` (read-only) |
+| `organizer:language` | This device only: `ru` or `en`. Read early by `boot.js` (read-only). Not in backups |
 | `arina-organizer-v1` | The prototype's data. **Read once, never written or deleted.** |
 
-`localStorage` is enough for this data size (hundreds of KB). Only `storage.js` touches it — with one read-only exception: `boot.js` reads `organizer:appearance` before the app starts.
+`localStorage` is enough for this data size (hundreds of KB). Only `storage.js` touches it — with one read-only exception: `boot.js` reads `organizer:appearance` and `organizer:language` before the app starts. The app writes only keys starting with `organizer:` (checked by a test).
 
 ### Dates and times
 - Calendar dates are local date keys `YYYY-MM-DD`; times are `HH:MM`; event moments are local wall-clock `YYYY-MM-DDTHH:MM` (no time zone).
@@ -180,15 +332,17 @@ The 30-day and 6-month ages are proposals — confirm or change.
 - Phase 1 adds unfinished **week** tasks from past weeks (`unfinishedBefore` is ready), plus «Завтра» and weekday choices.
 
 ### Screens and security
-- UI language: **Russian** (as in the prototype). *Assumption — confirm.*
+- Interface language: **Russian or English, chosen manually** (requirement 15, built in 0.3.0, see B9).
 - No inline event-handler attributes. Elements carry `data-action` / `data-form`; one listener in `app.js` routes them (this removed the cause of the "create event/project/list does nothing" bug).
 - Every value placed into HTML passes through `esc()`. Ids must match `[A-Za-z0-9_.:-]`.
-- A Content-Security-Policy in `index.html` allows only the app's own scripts.
+- A Content-Security-Policy in `index.html` allows only the app's own scripts and blocks requests to any other address (`default-src 'self'; connect-src 'self'`). See `SECURITY.md`.
+- Text from data files is treated as data: dictionary lookups use own keys only (a title such as `constructor` is shown as typed), and odd values in an imported file cannot break a screen.
 
 ### Installed app and updates
 - `sw.js` caches all app files (cache-first), so the app opens offline.
 - **Release rule:** after changing any file, bump `APP_VERSION` in `version.js` **and** `VERSION` in `sw.js` to the same new value; add new files to `ASSETS`. `tests.html` checks both.
-- A new version is installed in the background and waits. The app shows «Доступна новая версия · Обновить»; it never reloads on its own.
+- A new version is installed in the background and waits. The app shows «Доступна новая версия · Обновить»; it never reloads on its own. (As in every browser, a waiting version also starts once every window of the app has been closed.)
+- An update replaces only the app's files. It never clears or rewrites saved data; a data-format upgrade, when needed, happens on the next start under the guarded-upgrade rule (C, rule 10).
 
 ### Backups
 - «Сохранить копию» opens the iPhone share sheet (choose «Сохранить в Файлы»); if sharing is unavailable it downloads a file; a third fallback shows the backup text to copy.
@@ -198,9 +352,13 @@ The 30-day and 6-month ages are proposals — confirm or change.
 
 ---
 
-## D. Data model (schema version 2)
+## D. Data model (schema version 3)
 
-Document: `{ schemaVersion: 2, createdAt, updatedAt, tasks, events, projects, lists, settings, quarantine }`
+Document: `{ schemaVersion: 3, dataId, createdAt, updatedAt, tasks, events, projects, lists, settings, quarantine }`
+
+Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `settings.day` and `dataId`).
+
+**dataId:** a random id of this organizer, made on first start. It is not personal data. An import compares it to tell «my own backup» from «a backup from another organizer» (another device or another person). An old backup without it continues the current organizer; a backup moved to a new, empty device brings its id along.
 
 **Task**
 | Field | Type | Notes |
@@ -221,13 +379,49 @@ Document: `{ schemaVersion: 2, createdAt, updatedAt, tasks, events, projects, li
 
 **List:** `id, name, items ([{ id, title, done, createdAt, updatedAt, deletedAt }]), createdAt, updatedAt, deletedAt`.
 
-**Settings:** `{ eveningPreview: { enabled, time } }`.
+**Settings:** `{ eveningPreview: { enabled, time }, day: { wake, bed, cutoff, setupDone } }` — `wake`/`bed` are `'HH:MM'` or null, `cutoff` is `'HH:MM'` (default `'00:00'`). Each field is validated on its own, so one bad value never resets the others.
 
 **Quarantine entry:** `{ at, source: 'load'│'import'│'legacy'│…, collection, parentId, reason, record }`.
 
 Unknown extra fields on records are preserved. Changing the format means: bump `SCHEMA_VERSION`, add an upgrade step in `schema.js`, add a test.
 
 ---
+
+## F. Release rules for data preservation (owner, 2026-10-09) — release-blocking
+
+A version **must not be published** if a critical migration or data-isolation test fails. Each rule, how it is met, and how it is tested:
+
+| # | Rule | How it is met (0.3.0) | Tested by |
+|---|---|---|---|
+| R1 | Never reset, erase or overwrite user data during an update. | The service worker caches only app files and never touches storage; data is changed only through `store.js`. | `upgrade-test.py`; unit test on `sw.js` |
+| R2 | Every schema change has a backward-compatible upgrade from every supported earlier version. | `schema.js → normalizeDoc` upgrades v1 → v3 and v2 → v3 in one chain. Supported: prototype (v1), 0.2.0–0.2.2 (v2). | unit tests «Перенос данных», «Сохранность данных при обновлении» |
+| R3 | Before an upgrade: validate, keep a recoverable copy; if it fails, don't overwrite the original, explain, offer recovery. | Guarded upgrade (section C, rule 10): record check + exact-text rollback copy first; otherwise read-only + «Скачать исходные данные» (+ «Продолжить без копии» when only space was missing). | unit tests (copy failure, crash, six kinds of lost record) |
+| R4 | Test upgrades with realistic saved data from all previous supported versions. | 0.2.0, 0.2.1 and 0.2.2 builds, real data (80 tasks, 15 events, projects, lists, quarantine) and copies made by the old code itself. | `upgrade-test.py` × 3 versions; e2e (prototype) |
+| R5 | Completed tasks, deadlines, recurring history, projects, list items, settings and all other records intact. | Upgrade compares every collection field by field. (Recurring tasks do not exist yet; the event repeat rule is checked.) | `upgrade-test.py`, unit tests |
+| R6 | Test updates in two independent browser contexts; no mixing. | Two people upgraded side by side. | `upgrade-test.py`, `privacy-test.py` |
+| R7 | Service-worker updates must not clear `localStorage` or reset data. | `sw.js` has no storage code; only old `organizer-*` caches of app files are deleted. | unit test on `sw.js`; `upgrade-test.py` (no key removed) |
+| R8 | Never silently replace unreadable or newer data with an empty organizer. | Newer data → read-only. Unreadable data → raw text kept in rescue first, newest valid copy loaded, red banner. Failed upgrade → read-only with the data shown. | unit tests; `upgrade-test.py` (old window cannot overwrite) |
+| R9 | Daily copies: one per day, latest 5. Separate safe rollback for upgrades, imports, restores, never silently destroying the only recoverable copy. | Section C, rule 6: separate lists; no removal to make room; the user is asked before a unique rollback copy is rotated out. | unit tests «Хранилище», «Сбои записи», «Сохранность…» |
+| R10 | Don't change the URL, origin or storage identity without a tested data-transfer plan. | Storage keys unchanged since 0.2.0. Moving to a new address = export at the old address, import at the new one (README, SECURITY.md). | manual; documented |
+| R11 | Before each release: a migration test report and the remaining data-loss risks. | `TESTING.md`, section 2. | — |
+| R12 | If a version cannot safely read or upgrade data, stop instead of risking deletion. | Same as R3: nothing is written. | unit tests |
+
+These rules never promise that data cannot be lost: device loss, browser storage being cleared, and deleting the Home Screen app remain risks (see `TESTING.md` and `SECURITY.md`). Exported backups are the protection against them.
+
+## G. Privacy and data isolation (owner, 2026-10-09)
+
+Details, limits and evidence are in `SECURITY.md`. Rules every future update must keep:
+
+| # | Rule |
+|---|---|
+| P1 | Data is stored only in the browser storage of the device it was entered on, under `organizer:*` keys. No cookies, no IndexedDB, no `sessionStorage` (unless this file and `SECURITY.md` are changed on purpose). |
+| P2 | The app makes **no network requests** other than loading its own files. App code contains no `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource` or third-party addresses (only `sw.js` fetches the app's own files). A unit test fails otherwise. |
+| P3 | No analytics, trackers, third-party scripts, fonts or CDNs. The CSP stays `default-src 'self'` with `connect-src 'self'`; a unit test checks it. |
+| P4 | Data leaves the device only when the user does it: export (share sheet or download) or «Скопировать текст». |
+| P5 | Every import is previewed and confirmed; a backup from another organizer that replaces data needs a second confirmation. |
+| P6 | Any future sync must be opt-in, documented, and covered by new isolation tests. It is never added silently. |
+| P7 | The app's address (origin) must not be shared with other websites. Before the app is shared with other people it is published on its own origin (see `README.md`, «Publish»). |
+| P8 | Each release passes `privacy-test.py` (two independent browser contexts) before it is published. |
 
 ## E. Working rules for development
 
@@ -239,3 +433,8 @@ Unknown extra fields on records are preserved. Changing the format means: bump `
 6. **Format changes** need a schema version bump, an upgrade step and a test. Never remove a field without an upgrade step.
 7. **Release:** bump both version numbers, update `CHANGELOG.md`, and update this file when a rule changes.
 8. **Phases:** Phase 1 does not start until Phase 0 is reviewed (owner, 2026-10-09).
+9. **Release order** is in `ROADMAP.md`. Each release is small, is approved by the owner before work starts, and is reviewed before the next one begins.
+10. **Existing data is never lost.** Every format change keeps a frozen sample document for each earlier schema version in the tests, and checks the whole upgrade chain (prototype → current) field by field.
+11. **Required tests:** overnight dates (cutoff × time-of-day × month/year end × daylight-saving nights × several time zones), recurrence (rule calendars, idempotent generation, no duplicates with two windows or after import) and data migration. The full click-through suite runs in both themes and in both languages.
+12. **Release gate (owner, 2026-10-09):** a version is published only when `tests.html`, `e2e-test.py`, `privacy-test.py` and `upgrade-test.py` (from every supported earlier version) all pass, and `TESTING.md` holds the migration report with the remaining data-loss risks. A failed migration or isolation test blocks the release.
+13. **Future updates preserve data isolation** (section G) and the release rules (section F).

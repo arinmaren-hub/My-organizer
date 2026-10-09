@@ -3,10 +3,10 @@
 //
 // RELEASE RULE: after changing ANY app file, set VERSION to the same value as
 // APP_VERSION in version.js. The changed sw.js is what tells installed copies
-// that an update exists; they then show "Доступна новая версия · Обновить".
+// that an update exists; they then show the "new version available" banner.
 // If you add a new file, add it to ASSETS too (tests.html checks both).
 
-const VERSION = '0.2.2';
+const VERSION = '0.3.0';
 const CACHE = 'organizer-' + VERSION;
 const ASSETS = [
   './',
@@ -36,7 +36,10 @@ const ASSETS = [
   './view-lists.js',
   './view-data.js',
   './view-settings.js',
-  './appearance.js'
+  './appearance.js',
+  './i18n.js',
+  './planday.js',
+  './view-onboarding.js'
 ];
 
 self.addEventListener('install', event => {

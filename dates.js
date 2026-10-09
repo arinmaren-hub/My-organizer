@@ -2,7 +2,7 @@
 // ('YYYY-MM-DD'), times as 'HH:MM', event moments as 'YYYY-MM-DDTHH:MM'
 // (local wall-clock time). Record timestamps (createdAt etc.) are ISO UTC.
 // Weeks start on Monday; a week is identified by the date key of its Monday.
-// Nothing here depends on the browser's locale settings.
+// Nothing here depends on the browser's locale settings or the interface language.
 
 export const pad = n => String(n).padStart(2, '0');
 
@@ -55,25 +55,4 @@ export function timeOf(d) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-
-// 'пт, 9 окт'
-export function formatDay(key) {
-  if (!isDateKey(key)) return String(key ?? '');
-  const d = parseDateKey(key);
-  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
-}
-
-// 'пт, 9 окт, 10:00'
-export function formatDateTime(dt) {
-  if (!isDateTime(dt)) return String(dt ?? '');
-  return `${formatDay(dt.slice(0, 10))}, ${dt.slice(11)}`;
-}
-
-// ISO timestamp -> '9 окт 2026, 19:42' in local time.
-export function formatStamp(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${timeOf(d)}`;
-}
+// Day and month names, and formatted dates, live in i18n.js (they depend on the language).
