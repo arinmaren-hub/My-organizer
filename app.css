@@ -26,6 +26,8 @@
   --warn-bg: #f8edd8; --warn-line: #e2c993; --warn-ink: #4a3500;
   --error-bg: #f7e3df; --error-line: #e2b0a9; --error-ink: #5c140f;
   --note-bg: #f7efdf; --note-line: #e2d2ae;
+  --mk-ev: #2d5f9a; --mk-tk: #2f2b27; --mk-dl: #a8231b;
+  --sel-bg: #2f2b27; --sel-ink: #f9f6f0; --review-line: #d9b867;
 }
 
 /* Dark palette: muted warm greys, soft off-white text (no pure black or white). */
@@ -42,6 +44,8 @@
     --warn-bg: #302619; --warn-line: #5a4626; --warn-ink: #efd9ae;
     --error-bg: #36201d; --error-line: #643530; --error-ink: #f3cbc6;
     --note-bg: #2c271e; --note-line: #4d4330;
+    --mk-ev: #8db4e2; --mk-tk: #e2dccf; --mk-dl: #f0a8a2;
+    --sel-bg: #e2dccf; --sel-ink: #1f1d1a; --review-line: #7a6330;
   }
 }
 :root[data-theme="dark"] {
@@ -56,6 +60,8 @@
   --warn-bg: #302619; --warn-line: #5a4626; --warn-ink: #efd9ae;
   --error-bg: #36201d; --error-line: #643530; --error-ink: #f3cbc6;
   --note-bg: #2c271e; --note-line: #4d4330;
+  --mk-ev: #8db4e2; --mk-tk: #e2dccf; --mk-dl: #f0a8a2;
+  --sel-bg: #e2dccf; --sel-ink: #1f1d1a; --review-line: #7a6330;
 }
 
 * { box-sizing: border-box; }
@@ -131,3 +137,40 @@ button.quiet { min-height: 36px; padding: 6px 12px; font-size: 14px; color: var(
 .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 14px; }
 .choice.active { border: 2px solid var(--accent); padding: 9px 13px; font-weight: 600; }
 .choice .small { font-weight: 400; }
+
+/* ---- 0.4.0: editing, reviews, calendar, templates ---- */
+.card.review { border-color: var(--review-line); border-width: 2px; }
+.editform { width: 100%; }
+.editform .field input:not([type=checkbox]), .editform .field select { max-width: 60%; }
+details.datepick { margin: 6px 0 0; }
+details.datepick summary { font-size: 14px; color: var(--muted); padding: 4px 0; }
+.itemlabel { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.cathead { margin: 14px 0 0; }
+.cathead h3 { margin: 0; }
+input.num { width: 90px; }
+
+.cal-nav { flex-wrap: nowrap; }
+.cal-nav .cal-title { font-size: 18px; font-weight: 600; text-align: center; }
+.cal-nav button:not(.cal-title) { min-width: 48px; font-size: 22px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 10px 0 4px; }
+.cal-grid .wd { text-align: center; font-size: 13px; color: var(--muted); padding: 2px 0; }
+.cal-grid .day { min-height: 52px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; border-radius: 10px; }
+.cal-grid .day .n { font-size: 16px; line-height: 1.1; }
+.cal-grid .day.out { color: var(--muted); background: transparent; }
+.cal-grid .day.today { border: 2px solid var(--focus); padding: 3px 1px; }
+.cal-grid .day.planning:not(.today) { border-style: dashed; border-color: var(--ink); }
+.cal-grid .day.sel { background: var(--sel-bg); color: var(--sel-ink); border-color: var(--sel-bg); }
+.marks { display: flex; gap: 3px; align-items: center; justify-content: center; min-height: 8px; }
+.mk { display: inline-block; width: 7px; height: 7px; background: var(--mk-tk); }
+.mk.ev { border-radius: 50%; background: var(--mk-ev); }
+.mk.tk { border-radius: 1px; background: var(--mk-tk); }
+.mk.dl { transform: rotate(45deg); width: 6px; height: 6px; background: var(--mk-dl); }
+.cal-grid .day.sel .mk { box-shadow: 0 0 0 1.5px var(--sel-ink); }
+.year-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+.mini-month { text-align: left; padding: 8px; display: flex; flex-direction: column; gap: 4px; min-height: 0; height: auto; }
+.mini-month.cur { border: 2px solid var(--focus); padding: 7px; }
+.mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; font-size: 9px; line-height: 1.5; text-align: center; }
+.mini { color: var(--muted); }
+.mini.has { color: var(--ink); font-weight: 700; text-decoration: underline; }
+.mini.today { background: var(--focus); color: var(--bg); border-radius: 3px; }
+@media (max-width: 380px) { .cal-grid { gap: 2px; } .cal-grid .day { min-height: 48px; } }

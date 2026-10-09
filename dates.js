@@ -56,3 +56,19 @@ export function timeOf(d) {
 }
 
 // Day and month names, and formatted dates, live in i18n.js (they depend on the language).
+
+// Adds whole calendar months, clamping to the end of a shorter month
+// (31 Jan + 1 month = 28/29 Feb). Always counts from the date given, so callers
+// that want no drift add the total months to the ORIGINAL date.
+export function addMonths(key, n) {
+  const [y, m, d] = key.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12), nm = total % 12 + 1;
+  const last = new Date(ny, nm, 0, 12).getDate();
+  return `${String(ny).padStart(4, '0')}-${pad(nm)}-${pad(Math.min(d, last))}`;
+}
+
+// Day of week with Monday = 1 … Sunday = 7.
+export function isoWeekday(key) {
+  return (parseDateKey(key).getDay() + 6) % 7 + 1;
+}

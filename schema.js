@@ -3,8 +3,9 @@
 //
 // The whole app state is ONE document:
 // {
-//   schemaVersion: 3, dataId, createdAt, updatedAt,
+//   schemaVersion: 4, dataId, createdAt, updatedAt,
 //   tasks: [Task], events: [Event], projects: [Project], lists: [List],
+//   series: [Series], waiting: [Waiting], templates: [Template],
 //   settings: { eveningPreview: { enabled, time }, day: { wake, bed, cutoff, setupDone } },
 //   quarantine: [ { at, source, collection, parentId, reason, record } ]
 // }
@@ -16,10 +17,16 @@
 import { isDateKey, isTime, isDateTime, weekKey } from './dates.js';
 import { isPlainObject } from './util.js';
 
-// Version history: 1 = prototype (no number), 2 = 0.2.x, 3 = 0.3.0 (adds settings.day).
-export const SCHEMA_VERSION = 3;
-export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists'];
+// Version history: 1 = prototype (no number), 2 = 0.2.x, 3 = 0.3.0 (adds settings.day),
+// 4 = 0.4.0 (adds series, waiting, templates; task review/series fields; list categories).
+// Every step only ADDS fields and collections with defaults, so upgrading never removes data.
+export const SCHEMA_VERSION = 4;
+export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists', 'series', 'waiting', 'templates'];
 export const PLAN_KINDS = ['day', 'week', 'none'];
+export const REVIEW_CHOICES = ['moved', 'kept', 'done'];
+export const SERIES_FREQS = ['daily', 'weekly', 'monthly', 'yearly'];
+export const SERIES_MODES = ['completion', 'fixed'];
+export const BUILTIN_TEMPLATES = ['supermarket', 'suitcase'];
 
 const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
 export const isId = v => typeof v === 'string' && ID_RE.test(v);
@@ -46,7 +53,7 @@ export function emptyDoc(now) {
     dataId: null,
     createdAt: now,
     updatedAt: now,
-    tasks: [], events: [], projects: [], lists: [],
+    tasks: [], events: [], projects: [], lists: [], series: [], waiting: [], templates: [],
     settings: defaultSettings(),
     quarantine: []
   };
@@ -63,6 +70,11 @@ export function newTask({ id, title, plan, now }) {
     deadline: null,     // optional 'YYYY-MM-DD'; never changed by rescheduling
     projectId: null,    // optional link to a project
     done: false, completedAt: null,
+    review: null,       // { day, choice, part: 'am'|'pm' }: the planning day it was reviewed for, and what was decided
+    seriesId: null,     // set on occurrences of a recurring task
+    occurrenceDate: null, // the date the rule produced (with seriesId: unique)
+    skipped: false,     // an occurrence the user explicitly skipped
+    doneDay: null,      // planning day it was completed (recurrence counts from it)
     createdAt: now, updatedAt: now, deletedAt: null
   };
 }
@@ -85,11 +97,36 @@ export function newProject({ id, name, total, unit, now }) {
 }
 
 export function newList({ id, name, now }) {
-  return { id, name, items: [], createdAt: now, updatedAt: now, deletedAt: null };
+  return { id, name, items: [], categories: [], createdAt: now, updatedAt: now, deletedAt: null };
 }
 
-export function newItem({ id, title, now }) {
-  return { id, title, done: false, createdAt: now, updatedAt: now, deletedAt: null };
+export function newTemplate({ id, name, base = null, now }) {
+  return { id, name, base, items: [], categories: [], createdAt: now, updatedAt: now, deletedAt: null };
+}
+
+export function newWaiting({ id, title, from = null, followUp = null, now }) {
+  return {
+    id, title, from, followUp, note: '',
+    resolved: false, resolvedAt: null,
+    taskId: null,       // set when it was turned into a task
+    createdAt: now, updatedAt: now, deletedAt: null
+  };
+}
+
+// freq daily|weekly|monthly|yearly, every `interval` units; mode 'completion' = counted from the day
+// the previous occurrence was completed, 'fixed' = on a fixed calendar rhythm from startDate.
+export function newSeries({ id, title, freq, interval = 1, mode = 'completion', startDate, time = null, now }) {
+  return {
+    id, title, freq, interval, mode, startDate, time,
+    paused: false,
+    generatedThrough: null, // fixed mode: occurrences up to this date have been created (never again)
+    projectId: null,
+    createdAt: now, updatedAt: now, deletedAt: null
+  };
+}
+
+export function newItem({ id, title, category = null, now }) {
+  return { id, title, done: false, category, createdAt: now, updatedAt: now, deletedAt: null };
 }
 
 // ---------- Validation ----------
@@ -129,6 +166,17 @@ function checkTask(r, now) {
   if (t.projectId !== null && !isId(t.projectId)) return fail('reason.badProjectLink');
   t.completedAt = t.done ? (t.completedAt ?? null) : null;
   if (t.completedAt !== null && !isIso(t.completedAt)) return fail('reason.badCompletedAt');
+  t.review = t.review ?? null;
+  if (t.review !== null && (!isPlainObject(t.review) || !isDateKey(t.review.day) || !REVIEW_CHOICES.includes(t.review.choice))) return fail('reason.badReview');
+  if (t.review !== null) t.review = { day: t.review.day, choice: t.review.choice, part: t.review.part === 'pm' ? 'pm' : 'am' };
+  t.seriesId = t.seriesId ?? null;
+  if (t.seriesId !== null && !isId(t.seriesId)) return fail('reason.badSeriesLink');
+  t.occurrenceDate = t.occurrenceDate ?? null;
+  if (t.occurrenceDate !== null && !isDateKey(t.occurrenceDate)) return fail('reason.badOccurrence');
+  t.skipped = t.skipped ?? false;
+  if (!isBool(t.skipped)) return fail('reason.badSkipped');
+  t.doneDay = t.done ? (t.doneDay ?? null) : null;
+  if (t.doneDay !== null && !isDateKey(t.doneDay)) return fail('reason.badDoneDay');
   const s = stamps(t, now);
   return s ? fail(s) : { value: t };
 }
@@ -167,6 +215,7 @@ function checkItem(r, now) {
   if (!isId(i.id)) return fail('reason.badItemId');
   if (!isStr(i.title)) return fail('reason.noItemTitle');
   if (!isBool(i.done)) return fail('reason.badDone');
+  if (i.category !== undefined && i.category !== null && !isStr(i.category)) return fail('reason.badCategory');
   const s = stamps(i, now);
   return s ? fail(s) : { value: i };
 }
@@ -204,6 +253,8 @@ function checkList(r, now) {
   if (!isId(l.id)) return fail('reason.badId');
   if (!isStr(l.name)) return fail('reason.noTitle');
   if (!Array.isArray(l.items)) return fail('reason.itemsNotList');
+  // `categories` (names of categories that may hold no items yet) is optional: lists made before 0.4.0 have none.
+  if (l.categories !== undefined && (!Array.isArray(l.categories) || !l.categories.every(isStr))) return fail('reason.badCategories');
   const s = stamps(l, now);
   if (s) return fail(s);
   const { kept, bad } = checkNested(l.items, 'items', now);
@@ -211,7 +262,62 @@ function checkList(r, now) {
   return { value: l, nested: bad };
 }
 
-const CHECK = { tasks: checkTask, events: checkEvent, projects: checkProject, lists: checkList };
+// A template is a list without checkmarks. `base` names the built-in template it replaces
+// (the built-ins themselves live in the code, so a fresh organizer stores nothing for them).
+function checkTemplate(r, now) {
+  const res = checkList(r, now);
+  if (res.error) return res;
+  const tpl = res.value;
+  tpl.base = tpl.base ?? null;
+  if (tpl.base !== null && !BUILTIN_TEMPLATES.includes(tpl.base)) return fail('reason.badTemplateBase');
+  return res;
+}
+
+function checkWaiting(r, now) {
+  if (!isPlainObject(r)) return fail('reason.notObject');
+  const w = { ...r };
+  if (!isId(w.id)) return fail('reason.badId');
+  if (!isStr(w.title)) return fail('reason.noTitle');
+  w.from = w.from ?? null;
+  if (w.from !== null && !isStr(w.from)) return fail('reason.badFrom');
+  w.followUp = w.followUp ?? null;
+  if (w.followUp !== null && !isDateKey(w.followUp)) return fail('reason.badFollowUp');
+  w.note = w.note ?? '';
+  if (!isStr(w.note)) return fail('reason.badNote');
+  w.resolved = w.resolved ?? false;
+  if (!isBool(w.resolved)) return fail('reason.badResolved');
+  w.resolvedAt = w.resolved ? (w.resolvedAt ?? null) : null;
+  if (w.resolvedAt !== null && !isIso(w.resolvedAt)) return fail('reason.badCompletedAt');
+  w.taskId = w.taskId ?? null;
+  if (w.taskId !== null && !isId(w.taskId)) return fail('reason.badProjectLink');
+  const s = stamps(w, now);
+  return s ? fail(s) : { value: w };
+}
+
+function checkSeries(r, now) {
+  if (!isPlainObject(r)) return fail('reason.notObject');
+  const x = { ...r };
+  if (!isId(x.id)) return fail('reason.badId');
+  if (!isStr(x.title)) return fail('reason.noTitle');
+  if (!SERIES_FREQS.includes(x.freq)) return fail('reason.badFreq');
+  x.interval = x.interval ?? 1;
+  if (!Number.isInteger(x.interval) || x.interval < 1 || x.interval > 999) return fail('reason.badInterval');
+  x.mode = x.mode ?? 'completion';
+  if (!SERIES_MODES.includes(x.mode)) return fail('reason.badMode');
+  if (!isDateKey(x.startDate)) return fail('reason.badStartDate');
+  x.time = x.time ?? null;
+  if (x.time !== null && !isTime(x.time)) return fail('reason.badTaskTime');
+  x.paused = x.paused ?? false;
+  if (!isBool(x.paused)) return fail('reason.badPaused');
+  x.generatedThrough = x.generatedThrough ?? null;
+  if (x.generatedThrough !== null && !isDateKey(x.generatedThrough)) return fail('reason.badGenerated');
+  x.projectId = x.projectId ?? null;
+  if (x.projectId !== null && !isId(x.projectId)) return fail('reason.badProjectLink');
+  const s = stamps(x, now);
+  return s ? fail(s) : { value: x };
+}
+
+const CHECK = { tasks: checkTask, events: checkEvent, projects: checkProject, lists: checkList, series: checkSeries, waiting: checkWaiting, templates: checkTemplate };
 
 function normalizeSettings(input) {
   const def = defaultSettings();
@@ -373,7 +479,7 @@ export function findLostRecords(input, res) {
     const originals = byId(list);
     if (loaded.some(r => !hasOriginal(originals, r))) return key;
   }
-  const NESTED = [['projects', 'milestones', v1 ? 'steps' : 'milestones'], ['lists', 'items', 'items']];
+  const NESTED = [['projects', 'milestones', v1 ? 'steps' : 'milestones'], ['lists', 'items', 'items'], ['templates', 'items', 'items']];
   for (const [key, field, inputField] of NESTED) {
     if (!Array.isArray(input[key])) continue;
     const originals = byId(input[key]);
@@ -401,7 +507,9 @@ export function countActive(doc) {
     tasks: doc.tasks.filter(alive).length,
     events: doc.events.filter(alive).length,
     projects: doc.projects.filter(alive).length,
-    lists: doc.lists.filter(alive).length
+    lists: doc.lists.filter(alive).length,
+    // Newer kinds of records appear in the counts only when there are some.
+    ...Object.fromEntries(['series', 'waiting', 'templates'].map(k => [k, doc[k].filter(alive).length]).filter(([, n]) => n > 0))
   };
 }
 

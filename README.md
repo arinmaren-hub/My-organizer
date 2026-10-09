@@ -1,4 +1,4 @@
-# Мой органайзер — version 0.3.0
+# Мой органайзер — version 0.4.0
 
 A personal organizer that runs entirely on your iPhone or iPad: tasks, events, projects and lists.
 No account, no cloud, no AI. Your data stays on the device; you keep backups yourself.
@@ -72,11 +72,11 @@ If the new app is ever opened at the same address where the prototype stored dat
 
 ## 4. Everyday use
 
-- **Сегодня** — quick add (one task per line; date optional), morning review of unfinished past-day tasks, today's tasks, this week's tasks, today's events. «Сегодня» is **your** day: it changes at the time set in «День заканчивается в», not at midnight. «Завершить день» moves to the next day early (for example when you go to bed early); «Вернуть» undoes it.
-- **Календарь** — add and list events.
-- **Задачи** — all tasks by day / week / no date, with move buttons.
+- **Сегодня** — quick add (one task per line; only the title is needed; dates like «завтра», «в пятницу», «до пятницы», «Oct 15» are recognised), morning review of unfinished tasks, unconfirmed repeats, today's tasks, this week's tasks, today's events, and **Ожидаю от других** (things you wait for from others) at the bottom. **Вечер** opens the evening review and tomorrow's overview by hand; it also opens by itself once a day after the time set in «Настройки» — only while the app is open. «Сегодня» is **your** day: it changes at the time set in «День заканчивается в», not at midnight. «Завершить день» moves to the next day early (for example when you go to bed early); «Вернуть» undoes it.
+- **Календарь** — a month grid (Monday first) and a year view. Tap a date to see its events, tasks and deadlines and to add a task or an event there.
+- **Задачи** — all tasks by day / week / no date, move and edit buttons, and **recurring tasks** (daily, weekly, monthly, yearly).
 - **Прогресс** — projects with milestones and a number counter (e.g. 7 of 12 chapters).
-- **Списки** — shopping and personal lists.
+- **Списки** — shopping and personal lists, **templates** (Supermarket, Suitcase Packing, your own) and categories.
 - **Данные** — backups, restore, automatic copies, deleted items, storage status.
 - **Настройки** (button at the top right):
   - **Мой день** — usual wake-up time, bedtime, and when your day ends («День заканчивается в»; your bedtime is suggested). Event times, deadlines and dates never change because of this setting.
@@ -92,6 +92,7 @@ Something went wrong after an import or an update? **Данные → Авток
 
 ## 5. Publishing a new version (for whoever changes the code)
 
+0. **Updating an existing installation (also 0.3.0 → 0.4.0):** first save a backup («Данные → Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address). Open the installed app → «Доступна новая версия» → «Обновить». The message «Данные переведены в новый формат» is normal. Your data stays in place; the previous state is kept in «Данные → Автокопии» → «перед обновлением формата данных».
 1. Change the files. Follow `DECISIONS.md` sections E, F (data preservation) and G (privacy).
 2. Set the same new version in `version.js` (`APP_VERSION`) and `sw.js` (`VERSION`). New file? Add it to `ASSETS` in `sw.js`.
 3. Run the release gate (`TESTING.md`, section 6): `tests.html` all green, and `e2e-test.py`, `privacy-test.py`, `upgrade-test.py` (from every earlier version) all passing. **If a migration or isolation test fails, do not publish.**

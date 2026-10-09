@@ -6,7 +6,12 @@ import { APP_VERSION } from './version.js';
 import { createLocalStorageAdapter, KEYS } from './storage.js';
 import { createStore } from './store.js';
 import { hasContent } from './schema.js';
-import { dateKey, daysBetween, addDays } from './dates.js';
+import { eveningPreviewDue } from './selectors.js';
+import { uiState } from './components.js';
+import { renderEvening } from './view-evening.js';
+import { shiftMonth } from './calendar.js';
+import { formatDay } from './i18n.js';
+import { dateKey, daysBetween, addDays, weekKey } from './dates.js';
 import { t, msg, m, setLang, getLang, readLanguage, saveLanguage, LANGS, formatStamp } from './i18n.js';
 import { esc } from './util.js';
 import { buildBackupText, backupFileName } from './backup.js';
@@ -23,7 +28,7 @@ import { dayWindow, suggestCutoff } from './planday.js';
 import { MODES, readAppearance, saveAppearance, applyAppearance } from './appearance.js';
 
 const TABS = ['today', 'calendar', 'tasks', 'projects', 'lists', 'data'];
-const VIEWS = { today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData, settings: renderSettings };
+const VIEWS = { evening: renderEvening, today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData, settings: renderSettings };
 
 const storage = createLocalStorageAdapter();
 setLang(readLanguage(storage)); // chosen by hand; Russian by default; never detected
@@ -32,7 +37,11 @@ store.load();
 
 const ui = {
   tab: 'today',
-  quick: { text: '', kind: 'none', date: '' }, // quick-add draft survives redraws
+  quick: { text: '', kind: 'none', date: '', ask: null }, // quick-add draft survives redraws; ask = a line waiting for «задача или событие?»
+  editing: null,        // { kind, id } of the record being edited
+  tplEdit: null,        // id of the template open in the editor
+  cal: { mode: 'month', y: new Date().getFullYear(), m: new Date().getMonth() + 1, sel: dateKey(new Date()), picker: false },
+  eveningShown: null,
   importPreview: null,
   importError: '',
   showJson: false,
@@ -105,6 +114,9 @@ function captureTyping() {
   let sel = `form[data-form="${CSS.escape(f.dataset.form)}"]`;
   if (f.dataset.project) sel += `[data-project="${CSS.escape(f.dataset.project)}"]`;
   if (f.dataset.list) sel += `[data-list="${CSS.escape(f.dataset.list)}"]`;
+  if (f.dataset.id) sel += `[data-id="${CSS.escape(f.dataset.id)}"]`;
+  if (f.dataset.item) sel += `[data-item="${CSS.escape(f.dataset.item)}"]`;
+  if (f.dataset.coll) sel += `[data-coll="${CSS.escape(f.dataset.coll)}"]`;
   let start = null, end = null;
   try { start = el.selectionStart; end = el.selectionEnd; } catch { /* not a text field */ }
   return { sel, name: el.name, value: el.value, start, end };
@@ -127,12 +139,15 @@ function render() {
   const typing = captureTyping();
   ui.today = store.planningToday();
   ui.calendarToday = dateKey(new Date());
+  uiState.editing = ui.editing;
+  uiState.today = ui.today;
   applyLanguageToPage();
   const onboarding = needsOnboarding();
   $('#nav').hidden = onboarding;
   $('#settings-btn').hidden = onboarding;
+  const curTab = ui.tab === 'evening' ? 'today' : ui.tab; // «Вечер» belongs to «Сегодня»
   $('#nav').innerHTML = TABS.map(k =>
-    `<button type="button" class="${ui.tab === k ? 'active' : ''}" data-action="tab" data-tab="${k}"${ui.tab === k ? ' aria-current="page"' : ''}>${esc(t('tab.' + k))}</button>`).join('');
+    `<button type="button" class="${curTab === k ? 'active' : ''}" data-action="tab" data-tab="${k}"${curTab === k ? ' aria-current="page"' : ''}>${esc(t('tab.' + k))}</button>`).join('');
   const settingsBtn = $('#settings-btn');
   settingsBtn.classList.toggle('active', ui.tab === 'settings');
   if (ui.tab === 'settings') settingsBtn.setAttribute('aria-current', 'page'); else settingsBtn.removeAttribute('aria-current');
@@ -347,8 +362,90 @@ function rememberOnboardingDraft(e) {
 
 // ---------- event routing ----------
 
+// ---------- quick entry ----------
+
+const quickDefaults = () => ({ kind: ui.quick.kind, date: ui.quick.date });
+const whenText = spec => (spec.kind === 'week' ? t('plan.week', { day: { $day: spec.date } }) : spec.date ? `${formatDay(spec.date)}${spec.time ? ', ' + spec.time : ''}` : t('plan.none'));
+
+// Adds every line that is ready; stops at the first line with a time and asks
+// «задача или событие?». Text that was not handled stays in the box.
+function quickRun() {
+  const r = A.splitQuick(ui.quick.text, quickDefaults(), ui.today);
+  if (r.specs.length) {
+    if (!A.addTaskSpecs(store, r.specs)) return; // failed: the text stays, the message is shown
+    const first = r.specs.find(x => x.recognized);
+    if (first) {
+      store.notify('info', r.specs.filter(x => x.recognized).length > 1 ? 'quick.addedMany' : 'quick.added',
+        { n: r.specs.filter(x => x.recognized).length, title: first.title, when: whenText(first) });
+    }
+  }
+  ui.quick.text = r.rest;
+  ui.quick.ask = r.ask;
+  ui.refocus = 'form[data-form="task.quickAdd"]';
+  render();
+}
+
+// The answer to the question about a line with a time; the rest of the text goes on.
+function quickAnswer(how) {
+  const spec = ui.quick.ask;
+  if (!spec) return;
+  let done;
+  if (how === 'task') done = A.addTaskSpecs(store, [spec]);
+  else if (how === 'event') {
+    done = A.addEventFromSpec(store, spec);
+    if (done) store.notify('info', 'quick.eventAdded', { title: spec.title, when: whenText(spec) });
+  } else {
+    const d = quickDefaults();
+    const kind = d.kind === 'day' || d.kind === 'week' ? d.kind : 'none';
+    done = A.addTaskSpecs(store, [{ title: spec.raw, kind, date: kind === 'none' ? null : kind === 'week' ? weekKey(d.date || ui.today) : (d.date || ui.today), time: null, deadline: null }]);
+  }
+  if (!done) return;
+  ui.quick.text = ui.quick.text.split('\n').slice(1).join('\n');
+  ui.quick.ask = null;
+  quickRun();
+}
+
+// ---------- evening overview ----------
+
+function openEvening(auto) {
+  ui.tab = 'evening';
+  ui.editing = null;
+  if (auto) {
+    ui.eveningShown = ui.today;
+    store.setDevice({ lastEveningPreviewShownFor: A.addDaysKey(ui.today, 1) });
+  }
+  render();
+  window.scrollTo(0, 0);
+}
+
+// Offered only while the app is open, once per planning day, and never while the person is typing.
+function maybeOpenEvening() {
+  if (store.status.readOnly || needsOnboarding() || ui.tab === 'evening' || ui.tab === 'settings') return;
+  const el = document.activeElement;
+  if (el && el.matches && el.matches('input, textarea, select')) return;
+  const dev = store.device();
+  const due = eveningPreviewDue(store.doc.settings, new Date(), dev.lastEveningPreviewShownFor || null, store.doc.settings.day.cutoff, dev.dayFinishedThrough || null);
+  if (due && ui.eveningShown !== A.addDaysKey(due, -1)) openEvening(true);
+}
+
+// ---------- housekeeping: recurring tasks ----------
+
+function housekeeping() {
+  if (store.status.readOnly || needsOnboarding()) return;
+  const r = A.syncSeries(store);
+  if (r && r.capped) store.notify('warn', 'recur.capped', { n: 60 });
+}
+
+// ---------- event routing ----------
+
+const ids = el => String(el.dataset.ids || '').split(',').filter(Boolean);
+const startEdit = (kind, id) => { ui.editing = { kind, id }; render(); };
+const stopEdit = () => { ui.editing = null; render(); };
+
 const CLICK = {
-  tab: el => { ui.tab = el.dataset.tab; render(); window.scrollTo(0, 0); },
+  tab: el => { ui.tab = el.dataset.tab; ui.editing = null; render(); window.scrollTo(0, 0); },
+  'edit.open': el => (el.dataset.kind === 'item' ? startEdit('item', el.dataset.id) : startEdit(el.dataset.kind, el.dataset.id)),
+  'edit.cancel': () => stopEdit(),
   'task.move': el => A.moveTask(store, el.dataset.id, el.dataset.kind),
   'task.delete': el => confirmDelete() && A.softDelete(store, 'tasks', el.dataset.id),
   'event.delete': el => confirmDelete() && A.softDelete(store, 'events', el.dataset.id),
@@ -380,8 +477,72 @@ const CLICK = {
     const c = f && f.elements.namedItem('cutoff');
     if (c) c.value = suggestCutoff(val(f, 'bed'));
   },
-  'onboarding.skip': () => A.skipOnboarding(store)
+  'onboarding.skip': () => A.skipOnboarding(store),
+
+  // quick entry
+  'quick.asTask': () => quickAnswer('task'),
+  'quick.asEvent': () => quickAnswer('event'),
+  'quick.asText': () => quickAnswer('text'),
+  'quick.askCancel': () => { ui.quick.ask = null; render(); },
+
+  // reviews and the evening overview
+  review: el => A.reviewTask(store, el.dataset.id, el.dataset.choice, '', el.dataset.part),
+  'review.all': el => {
+    const list = ids(el);
+    if (list.length && confirm(t('confirm.allToTomorrow', { n: list.length }))) A.reviewManyToTomorrow(store, list, el.dataset.part);
+  },
+  'occ.confirm': el => A.confirmOccurrence(store, el.dataset.id, el.dataset.how),
+  'evening.open': () => openEvening(false),
+  'evening.close': () => { ui.tab = 'today'; render(); window.scrollTo(0, 0); },
+
+  // waiting for others
+  'wait.resolve': el => A.resolveWaiting(store, el.dataset.id, true),
+  'wait.reopen': el => A.resolveWaiting(store, el.dataset.id, false),
+  'wait.toTask': el => A.waitingToTask(store, el.dataset.id),
+  'wait.again': el => A.setWaitingFollowUp(store, el.dataset.id, { days: Number(el.dataset.days) }),
+  'wait.delete': el => confirmDelete() && A.softDelete(store, 'waiting', el.dataset.id),
+
+  // recurring tasks
+  'series.pause': el => A.pauseSeries(store, el.dataset.id, !!el.dataset.paused),
+  'series.delete': el => confirmDelete() && A.softDelete(store, 'series', el.dataset.id),
+
+  // lists and templates
+  'item.delete': el => confirmDelete() && A.deleteContainerItem(store, el.dataset.coll || 'lists', el.dataset.list, el.dataset.id),
+  'cat.rename': el => {
+    const to = prompt(t('lists.categoryNamePh'), el.dataset.name);
+    if (to && to.trim() && to !== el.dataset.name) A.renameCategory(store, el.dataset.coll, el.dataset.list, el.dataset.name, to);
+  },
+  'cat.remove': el => confirm(t('confirm.removeCategory', { name: el.dataset.name })) && A.removeCategory(store, el.dataset.coll, el.dataset.list, el.dataset.name),
+  'list.saveTemplate': el => {
+    const list = store.doc.lists.find(l => l.id === el.dataset.id);
+    if (list && A.saveListAsTemplate(store, list.id)) store.notify('info', 'lists.templateSaved', { name: list.name });
+  },
+  'tpl.use': el => {
+    const id = A.createListFromTemplate(store, el.dataset.id);
+    if (id) { const l = store.doc.lists.find(x => x.id === id); store.notify('info', 'lists.created', { name: l ? l.name : '' }); }
+  },
+  'tpl.edit': el => { ui.tplEdit = el.dataset.id; ui.editing = null; render(); },
+  'tpl.close': () => { ui.tplEdit = null; ui.editing = null; render(); },
+  'tpl.delete': el => { if (confirmDelete()) { if (ui.tplEdit === el.dataset.id) ui.tplEdit = null; A.softDelete(store, 'templates', el.dataset.id); } },
+  'tpl.restoreBuiltin': el => A.restoreBuiltinTemplates(store, String(el.dataset.bases).split(',').filter(Boolean)),
+
+  // calendar
+  'cal.select': el => { ui.cal.sel = el.dataset.date; render(); },
+  'cal.prev': () => { const n = shiftMonth(ui.cal.y, ui.cal.m, -1); Object.assign(ui.cal, { y: n.y, m: n.m }); calKeepSel(); render(); },
+  'cal.next': () => { const n = shiftMonth(ui.cal.y, ui.cal.m, 1); Object.assign(ui.cal, { y: n.y, m: n.m }); calKeepSel(); render(); },
+  'cal.prevYear': () => { ui.cal.y = Math.max(1900, ui.cal.y - 1); render(); },
+  'cal.nextYear': () => { ui.cal.y = Math.min(2200, ui.cal.y + 1); render(); },
+  'cal.today': () => { const d = dateKey(new Date()); Object.assign(ui.cal, { y: Number(d.slice(0, 4)), m: Number(d.slice(5, 7)), sel: d, mode: 'month', picker: false }); render(); },
+  'cal.mode': el => { ui.cal.mode = el.dataset.mode; ui.cal.picker = false; render(); },
+  'cal.pickToggle': () => { ui.cal.picker = !ui.cal.picker; render(); },
+  'cal.openMonth': el => { Object.assign(ui.cal, { y: Number(el.dataset.y), m: Number(el.dataset.m), mode: 'month' }); calKeepSel(); render(); }
 };
+
+// Moving to another month selects the same day number there (or the 1st).
+function calKeepSel() {
+  const day = Math.min(Number(ui.cal.sel.slice(8)), new Date(ui.cal.y, ui.cal.m, 0).getDate());
+  ui.cal.sel = `${String(ui.cal.y).padStart(4, '0')}-${String(ui.cal.m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
 
 const CHANGE = {
   'task.toggle': el => A.setTaskDone(store, el.dataset.id, el.checked),
@@ -389,14 +550,16 @@ const CHANGE = {
   'item.toggle': el => A.setListItemDone(store, el.dataset.list, el.dataset.id, el.checked),
   'qty.set': el => A.setQuantity(store, el.dataset.id, el.value),
   'quick.kind': el => { const d = el.form.elements.namedItem('date'); if (d) d.hidden = el.value === 'none'; },
+  // edit form: show only the fields that make sense for the chosen kind
+  'edit.kind': el => { for (const f of el.form.querySelectorAll('[data-show]')) f.hidden = !f.dataset.show.split(' ').includes(el.value); },
   'import.file': el => importFile(el)
 };
 
+const fv = (f, name) => val(f, name);
+const afterEdit = ok => { if (ok) { ui.editing = null; render(); } };
+
 const FORMS = {
-  'task.quickAdd': f => {
-    const n = A.addTasksFromText(store, val(f, 'text'), val(f, 'kind'), val(f, 'date'));
-    if (n) { ui.quick.text = ''; ui.refocus = 'form[data-form="task.quickAdd"]'; render(); }
-  },
+  'task.quickAdd': () => quickRun(),
   'event.add': f => A.addEvent(store, { title: val(f, 'title'), start: val(f, 'start') }),
   'project.add': f => A.addProject(store, { name: val(f, 'name'), total: val(f, 'total'), unit: val(f, 'unit') }),
   'milestone.add': f => {
@@ -405,19 +568,54 @@ const FORMS = {
   },
   'list.add': f => A.addList(store, val(f, 'name')),
   'item.add': f => {
-    ui.refocus = `form[data-form="item.add"][data-list="${CSS.escape(f.dataset.list)}"]`;
-    A.addListItem(store, f.dataset.list, val(f, 'title'));
+    const coll = f.dataset.coll || 'lists';
+    ui.refocus = `form[data-form="item.add"][data-list="${CSS.escape(f.dataset.list)}"][data-coll="${coll}"]`;
+    A.addContainerItem(store, coll, f.dataset.list, val(f, 'title'), val(f, 'category').trim() || null);
   },
+  'item.edit': f => afterEdit(A.editContainerItem(store, f.dataset.coll, f.dataset.list, f.dataset.item, { title: val(f, 'title'), category: val(f, 'category').trim() || null })),
+  'cat.add': f => A.addCategory(store, f.dataset.coll, f.dataset.list, val(f, 'name')),
+  'tpl.add': f => { const id = A.addTemplate(store, val(f, 'name')); if (id) { ui.tplEdit = id; render(); } },
+  'tpl.rename': f => A.renameContainer(store, 'templates', f.dataset.list, val(f, 'name')),
   'import.paste': f => previewImportText(val(f, 'text')),
   'onboarding.save': f => A.finishOnboarding(store, timeValues(f)),
-  'day.save': f => { if (A.setDaySettings(store, timeValues(f))) store.notify('info', 'day.saved'); }
+  'day.save': f => { if (A.setDaySettings(store, timeValues(f))) store.notify('info', 'day.saved'); },
+  'evening.save': f => { if (A.setEveningSettings(store, { enabled: f.elements.namedItem('enabled').checked, time: val(f, 'time') })) store.notify('info', 'evening.saved'); },
+  'evening.add': f => { ui.refocus = 'form[data-form="evening.add"]'; A.addTaskSpecs(store, [{ title: val(f, 'title').trim(), kind: 'day', date: A.addDaysKey(ui.today, 1), time: null, deadline: null }]); },
+
+  // editing
+  'task.edit': f => afterEdit(A.editTask(store, f.dataset.id, { title: val(f, 'title'), kind: val(f, 'kind'), date: val(f, 'date'), time: val(f, 'time'), deadline: val(f, 'deadline') })),
+  'event.edit': f => afterEdit(A.editEvent(store, f.dataset.id, { title: val(f, 'title'), start: val(f, 'start'), end: val(f, 'end') })),
+  'task.moveDate': f => A.moveTask(store, f.dataset.id, 'day', val(f, 'date')),
+  'review.date': f => A.reviewTask(store, f.dataset.id, 'date', val(f, 'date'), f.dataset.part),
+
+  // waiting for others
+  'wait.add': f => A.addWaiting(store, { title: val(f, 'title'), from: val(f, 'from'), followUp: val(f, 'followUp') }),
+  'waiting.edit': f => afterEdit(A.editWaiting(store, f.dataset.id, { title: val(f, 'title'), from: val(f, 'from'), followUp: val(f, 'followUp'), note: val(f, 'note') })),
+  'wait.snooze': f => A.setWaitingFollowUp(store, f.dataset.id, { date: val(f, 'date') }),
+
+  // recurring tasks
+  'series.add': f => A.addSeries(store, seriesValues(f)),
+  'series.edit': f => afterEdit(A.editSeries(store, f.dataset.id, seriesValues(f), f.elements.namedItem('applyOpen').checked)),
+
+  // calendar
+  'cal.go': f => {
+    const y = Number(val(f, 'y')), m = Number(val(f, 'm'));
+    if (Number.isInteger(y) && y >= 1900 && y <= 2200 && m >= 1 && m <= 12) { Object.assign(ui.cal, { y, m, picker: false }); calKeepSel(); render(); }
+  },
+  'cal.add': (f, submitter) => {
+    const as = submitter && submitter.value === 'event' ? 'event' : 'task';
+    A.addOnDate(store, { as, title: val(f, 'title'), date: f.dataset.date, time: val(f, 'time') });
+    ui.refocus = 'form[data-form="cal.add"]';
+  }
 };
+
+const seriesValues = f => ({ title: val(f, 'title'), freq: val(f, 'freq'), interval: val(f, 'interval'), mode: val(f, 'mode'), startDate: val(f, 'startDate'), time: val(f, 'time') });
 
 const errText = e => (e && e.key ? m(e.key, e.params) : (e && e.message) || String(e));
 
-function run(fn, el) {
+function run(fn, el, extra) {
   try {
-    const r = fn(el);
+    const r = fn(el, extra);
     if (r && typeof r.catch === 'function') r.catch(e => store.notify('error', 'notice.genericError', { msg: errText(e) }));
   } catch (e) {
     console.error(e);
@@ -446,13 +644,18 @@ document.addEventListener('submit', e => {
   const fn = FORMS[f.dataset.form];
   if (!fn) return;
   ui.inSubmit = true;
-  try { run(fn, f); } finally { ui.inSubmit = false; }
+  try { run(fn, f, e.submitter); } finally { ui.inSubmit = false; }
 });
 
 // Remember the quick-add draft as it is typed or picked, so redraws never lose it.
 function rememberQuickDraft(e) {
   const f = e.target.form;
-  if (f && f.dataset.form === 'task.quickAdd' && e.target.name in ui.quick) ui.quick[e.target.name] = e.target.value;
+  if (f && f.dataset.form === 'task.quickAdd' && e.target.name in ui.quick) {
+    ui.quick[e.target.name] = e.target.value;
+    // The question belongs to the line as it was; once the text is edited the line may differ or
+    // have moved, so the question is dropped (nothing is added or removed) and asked again on submit.
+    if (e.target.name === 'text' && ui.quick.ask) { ui.quick.ask = null; render(); }
+  }
 }
 document.addEventListener('input', rememberQuickDraft);
 document.addEventListener('change', rememberQuickDraft);
@@ -464,11 +667,15 @@ document.addEventListener('change', rememberOnboardingDraft);
 // «Сегодня» switches at the planning-day cutoff; at midnight only the
 // calendar-date hint and event labels change.
 function checkDayChange() {
-  if (store.planningToday() !== ui.today || dateKey(new Date()) !== ui.calendarToday) render();
+  const changed = store.planningToday() !== ui.today || dateKey(new Date()) !== ui.calendarToday;
+  if (store.planningToday() !== ui.today) housekeeping();   // a new planning day: recurring tasks come due
+  if (changed) render();
+  maybeOpenEvening();
 }
 setInterval(checkDayChange, 30000);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    housekeeping();
     checkDayChange();
     if (ui.swReg) ui.swReg.update().catch(() => {});
   }
@@ -539,7 +746,9 @@ async function refreshStorageInfo() {
 }
 
 // ---------- start ----------
+housekeeping();
 render();
+maybeOpenEvening();
 window.__organizerReady = true;
 registerServiceWorker();
 refreshStorageInfo();

@@ -47,9 +47,23 @@ function daySection(day) {
     </section>`;
 }
 
+function eveningSection(ep) {
+  return `
+    <section class="card">
+      <h2>${esc(t('evening.settingsTitle'))}</h2>
+      <form data-form="evening.save" autocomplete="off">
+        <label class="line"><input type="checkbox" name="enabled" ${ep.enabled ? 'checked' : ''}> <span>${esc(t('evening.enable'))}</span></label>
+        <label class="field"><span>${esc(t('evening.time'))}</span><input type="time" name="time" value="${esc(ep.time)}" required></label>
+        <p class="muted small">${esc(t('evening.settingsNote'))}</p>
+        <div class="line"><button type="submit" class="primary">${esc(t('day.save'))}</button></div>
+      </form>
+    </section>`;
+}
+
 export function renderSettings(doc, ctx) {
   return `
     ${daySection(doc.settings.day)}
+    ${eveningSection(doc.settings.eveningPreview)}
     <section class="card">
       <h2>${esc(t('set.language'))}</h2>
       ${languageChoices(ctx.language)}

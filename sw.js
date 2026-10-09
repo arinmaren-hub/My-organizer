@@ -6,7 +6,7 @@
 // that an update exists; they then show the "new version available" banner.
 // If you add a new file, add it to ASSETS too (tests.html checks both).
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const CACHE = 'organizer-' + VERSION;
 const ASSETS = [
   './',
@@ -38,6 +38,13 @@ const ASSETS = [
   './view-settings.js',
   './appearance.js',
   './i18n.js',
+  './i18n-v4.js',
+  './parsedate.js',
+  './recur.js',
+  './templates.js',
+  './calendar.js',
+  './view-waiting.js',
+  './view-evening.js',
   './planday.js',
   './view-onboarding.js'
 ];

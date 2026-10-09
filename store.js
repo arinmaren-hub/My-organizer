@@ -399,7 +399,8 @@ export function createStore({ storage, clock = () => new Date(), keys = KEYS, no
 
   function purgeOldDeleted() {
     const cutoff = clock().getTime() - PURGE_AFTER_DAYS * 864e5;
-    const old = r => r.deletedAt && Date.parse(r.deletedAt) < cutoff;
+    // A deleted built-in template stays as a marker (templates.js), otherwise it would reappear.
+    const old = r => r.deletedAt && !r.base && Date.parse(r.deletedAt) < cutoff;
     let n = 0;
     for (const k of COLLECTIONS) {
       const before = doc[k].length;
@@ -407,7 +408,7 @@ export function createStore({ storage, clock = () => new Date(), keys = KEYS, no
       n += before - doc[k].length;
     }
     for (const p of doc.projects) { const b = p.milestones.length; p.milestones = p.milestones.filter(m => !old(m)); n += b - p.milestones.length; }
-    for (const l of doc.lists) { const b = l.items.length; l.items = l.items.filter(i => !old(i)); n += b - l.items.length; }
+    for (const l of [...doc.lists, ...doc.templates]) { const b = l.items.length; l.items = l.items.filter(i => !old(i)); n += b - l.items.length; }
     return n;
   }
 

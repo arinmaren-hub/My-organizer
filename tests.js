@@ -15,6 +15,8 @@ import { MODES, readAppearance, saveAppearance, applyAppearance } from './appear
 import { naturalDay, planningDay, dayWindow, suggestCutoff } from './planday.js';
 import { t, msg, m, setLang, getLang, readLanguage, saveLanguage, formatDay, formatDateTime, formatStamp, DICTS, addTexts, has, missing, LANGS } from './i18n.js';
 
+import { registerV4 } from './tests-v4.js';
+
 setLang('ru'); // texts below are checked in Russian unless a test says otherwise
 
 const tests = [];
@@ -828,7 +830,7 @@ test(L, 'ошибки импорта — ключи на обоих языках
 });
 test(L, 'в коде нет русского текста интерфейса вне i18n.js (кроме boot.js)', async () => {
   const sw = await (await fetch('sw.js', { cache: 'no-store' })).text();
-  const files = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"')).filter(f => f.endsWith('.js') && !/i18n\.js|boot\.js/.test(f));
+  const files = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"')).filter(f => f.endsWith('.js') && !/i18n\.js|i18n-v4\.js|boot\.js/.test(f));
   const found = [];
   for (const f of files) {
     const code = (await (await fetch(f, { cache: 'no-store' })).text())
@@ -1003,48 +1005,55 @@ test(P, 'изменение отбоя вручную меняет только 
 
 // ================= data migration (0.3.0) =================
 const MG = 'Перенос данных';
+// Records exactly as 0.2.x/0.3.0 wrote them: without the fields added in 0.4.0.
+const oldTask = t => { const o = { ...t }; delete o.review; delete o.seriesId; delete o.occurrenceDate; delete o.skipped; delete o.doneDay; return o; };
+// After an upgrade every old field is unchanged; only the new fields are added with their defaults.
+const NEW_TASK_DEFAULTS = { review: null, seriesId: null, occurrenceDate: null, skipped: false, doneDay: null };
+const upgradedTasks = list => list.map(t => ({ ...t, ...NEW_TASK_DEFAULTS }));
 const V2_DOC = {
   schemaVersion: 2, createdAt: '2026-10-01T09:00:00.000Z', updatedAt: '2026-10-09T09:00:00.000Z',
   tasks: [
     { ...newTask({ id: 't1', title: 'Задача с дедлайном', plan: { kind: 'day', date: '2026-10-06' }, now: NOW }), deadline: '2026-10-20' },
     { ...newTask({ id: 't2', title: 'Сделана', plan: { kind: 'week', date: '2026-10-05' }, now: NOW }), done: true, completedAt: NOW },
     { ...newTask({ id: 't3', title: 'Удалена', plan: { kind: 'none' }, now: NOW }), deletedAt: NOW, extra: 'сохранить' }
-  ],
+  ].map(oldTask),
   events: [{ id: 'e1', title: 'Лекция', start: '2026-10-09T10:00', end: null, allDay: false, repeat: null, alerts: [], createdAt: NOW, updatedAt: NOW, deletedAt: null }],
   projects: [{ id: 'p1', name: 'Диплом', milestones: [{ id: 'm1', title: 'План', done: true, createdAt: NOW, updatedAt: NOW, deletedAt: null }], quantity: { current: 7, total: 12, unit: 'глав' }, createdAt: NOW, updatedAt: NOW, deletedAt: null }],
   lists: [{ id: 'l1', name: 'Покупки', items: [{ id: 'i1', title: 'Молоко', done: false, createdAt: NOW, updatedAt: NOW, deletedAt: null }], createdAt: NOW, updatedAt: NOW, deletedAt: null }],
   settings: { eveningPreview: { enabled: true, time: '22:00' } },
   quarantine: [{ at: NOW, source: 'import', collection: 'events', parentId: null, reason: 'нет или неверное время начала', record: { id: 'x' } }]
 };
-test(MG, 'v2 → v3: все записи и поля без изменений, добавлены настройки дня', () => {
+test(MG, 'v2 → v4: все записи и поля без изменений, добавлены настройки дня и новые поля', () => {
   const r = normalizeDoc(V2_DOC, { now: NOW });
   eq(r.migratedFrom, 2);
-  eq(r.doc.schemaVersion, 3);
-  for (const k of ['tasks', 'events', 'projects', 'lists', 'quarantine']) eq(r.doc[k], V2_DOC[k], k);
+  eq(r.doc.schemaVersion, 4);
+  eq(r.doc.tasks, upgradedTasks(V2_DOC.tasks), 'tasks');
+  for (const k of ['events', 'projects', 'lists', 'quarantine']) eq(r.doc[k], V2_DOC[k], k);
+  for (const k of ['series', 'waiting', 'templates']) eq(r.doc[k], [], k);
   eq(r.doc.settings.eveningPreview, { enabled: true, time: '22:00' });
   eq(r.doc.settings.day, { wake: null, bed: null, cutoff: '00:00', setupDone: false });
   eq([r.doc.createdAt, r.doc.updatedAt], [V2_DOC.createdAt, V2_DOC.updatedAt]);
 });
-test(MG, 'v1 (прототип) → v3 одной цепочкой', () => {
+test(MG, 'v1 (прототип) → v4 одной цепочкой', () => {
   const r = normalizeDoc(PROTOTYPE, { now: NOW });
   eq(r.migratedFrom, 1);
-  eq(r.doc.schemaVersion, 3);
+  eq(r.doc.schemaVersion, 4);
   eq(countActive(r.doc), { tasks: 3, events: 1, projects: 1, lists: 1 });
   eq(r.doc.settings.day.cutoff, '00:00');
 });
-test(MG, 'v2 в хранилище: при запуске сохраняется как v3, ничего не теряется, поведение то же', () => {
+test(MG, 'v2 в хранилище: при запуске сохраняется как v4, ничего не теряется, поведение то же', () => {
   const { store, storage } = setup({ [KEYS.data]: JSON.stringify(V2_DOC) });
   const saved = JSON.parse(storage.get(KEYS.data));
-  eq(saved.schemaVersion, 3);
-  eq(saved.tasks, V2_DOC.tasks);
+  eq(saved.schemaVersion, 4);
+  eq(saved.tasks, upgradedTasks(V2_DOC.tasks));
   eq(store.planningToday(), '2026-10-09', 'отбой 00:00 = календарная дата');
   eq(overdueForReview(store.doc, store.planningToday()).map(x => x.id), ['t1']);
 });
-test(MG, 'резервная копия 0.2.x импортируется в 0.3.0', () => {
+test(MG, 'резервная копия 0.2.x импортируется в 0.4.0', () => {
   const { store } = setup();
   const p = store.previewImport(JSON.stringify({ app: 'organizer', kind: 'backup', appVersion: '0.2.2', schemaVersion: 2, exportedAt: NOW, data: V2_DOC }));
   ok(p.ok);
-  eq(p.doc.schemaVersion, 3);
+  eq(p.doc.schemaVersion, 4);
   eq(p.counts, { tasks: 2, events: 1, projects: 1, lists: 1 });
 });
 test(MG, 'автокопия формата v2 восстанавливается', () => {
@@ -1053,10 +1062,10 @@ test(MG, 'автокопия формата v2 восстанавливаетс�
   A.addTasksFromText(store, 'текущая');
   eq(store.restoreSnapshot('old').ok, true);
   eq(store.doc.tasks.length, 3);
-  eq(store.doc.schemaVersion, 3);
+  eq(store.doc.schemaVersion, 4);
 });
-test(MG, 'данные v4 (будущая версия) не трогаются: только чтение', () => {
-  const raw = JSON.stringify({ ...V2_DOC, schemaVersion: 4 });
+test(MG, 'данные v5 (будущая версия) не трогаются: только чтение', () => {
+  const raw = JSON.stringify({ ...V2_DOC, schemaVersion: 5 });
   const { store, storage } = setup({ [KEYS.data]: raw });
   ok(store.status.readOnly);
   eq(storage.get(KEYS.data), raw);
@@ -1180,7 +1189,7 @@ test(R, 'нет места для копии — обновление остан
   eq(store.continueUpgradeWithoutCopy().ok, true);
   ok(!store.status.readOnly);
   eq(savedDoc(storage).schemaVersion, SCHEMA_VERSION);
-  eq(savedDoc(storage).tasks, V2_DOC.tasks);
+  eq(savedDoc(storage).tasks, upgradedTasks(V2_DOC.tasks));
 });
 test(R, 'продолжить без копии можно только в этой ситуации', () => {
   const { store } = setup({ [KEYS.data]: V2_RAW });
@@ -1330,7 +1339,7 @@ test(R, 'запись списка копий «наполовину» не по
 });
 test(R, 'копии 0.2.x в ежедневном списке не вытесняются, пока их не удалось перенести', () => {
   const legacy = { id: 'imp', at: '2026-10-01T09:00:00.000Z', reason: 'before-import', data: V2_DOC };
-  const storage = createMemoryAdapter({ [KEYS.data]: JSON.stringify({ ...V2_DOC, schemaVersion: 3 }), [KEYS.snapshots]: JSON.stringify([legacy]) });
+  const storage = createMemoryAdapter({ [KEYS.data]: JSON.stringify({ ...V2_DOC, schemaVersion: SCHEMA_VERSION }), [KEYS.snapshots]: JSON.stringify([legacy]) });
   failWrites(storage, KEYS.rollback, 'quota');
   const clock = makeClock(2026, 10, 9);
   const store = createStore({ storage, clock });
@@ -1522,6 +1531,8 @@ test('PWA', 'в коде нет встроенных обработчиков on
     ok(!/\son[a-z]+\s*=\s*["'`]/i.test(code), `${f} содержит встроенный обработчик`);
   }
 });
+
+registerV4({ test, eq, ok, setup, makeClock, savedDoc, failWrites, healWrites, rollbackCopies, dailyCopies, changeOnDays, titles, A });
 
 // ================= runner =================
 async function run() {

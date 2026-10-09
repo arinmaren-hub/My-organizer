@@ -67,8 +67,8 @@ def step(name):
         return fn
     return deco
 
-MARK_A = ['A-секрет-задача', 'A-секрет-событие', 'A-секрет-проект', 'A-секрет-список', 'A-секрет-пункт']
-MARK_B = ['B-secret-task', 'B-secret-event', 'B-secret-project', 'B-secret-list', 'B-secret-item']
+MARK_A = ['A-секрет-задача', 'A-секрет-событие', 'A-секрет-проект', 'A-секрет-список', 'A-секрет-пункт', 'A-секрет-ожидание', 'A-секрет-повтор']
+MARK_B = ['B-secret-task', 'B-secret-event', 'B-secret-project', 'B-secret-list', 'B-secret-item', 'B-secret-waiting', 'B-secret-repeat']
 ALL_MARKS = MARK_A + MARK_B
 def encodings(s):
     return {s, urllib.parse.quote(s), urllib.parse.quote_plus(s), s.encode('unicode_escape').decode()}
@@ -105,13 +105,13 @@ with sync_playwright() as p:
         q.click(f'nav button >> nth={i}')
 
     def fill_data(q, marks):
-        task, event, project, lst, item = marks
+        task, event, project, lst, item, wait, rep = marks
         q.fill('form[data-form="task.quickAdd"] textarea', task)
         q.click('form[data-form="task.quickAdd"] button[type=submit]')
         tab(q, 1)
-        q.fill('form[data-form="event.add"] input[name=title]', event)
-        q.fill('form[data-form="event.add"] input[name=start]', '2026-10-20T10:00')
-        q.click('form[data-form="event.add"] button[type=submit]')
+        q.fill('form[data-form="cal.add"] input[name=title]', event)
+        q.fill('form[data-form="cal.add"] input[name=time]', '10:00')
+        q.click('form[data-form="cal.add"] button[value=event]')
         tab(q, 3)
         q.fill('form[data-form="project.add"] input[name=name]', project)
         q.fill('form[data-form="project.add"] input[name=total]', '10')
@@ -122,7 +122,14 @@ with sync_playwright() as p:
         q.click('form[data-form="list.add"] button[type=submit]')
         q.fill('form[data-form="item.add"] input[name=title]', item)
         q.press('form[data-form="item.add"] input[name=title]', 'Enter')
+        q.locator('[data-action="list.saveTemplate"]').first.click()
+        tab(q, 2)
+        q.click('main details:has(form[data-form="series.add"]) > summary')
+        q.fill('form[data-form="series.add"] input[name=title]', rep)
+        q.click('form[data-form="series.add"] button[type=submit]')
         tab(q, 0)
+        q.fill('form[data-form="wait.add"] input[name=title]', wait)
+        q.click('form[data-form="wait.add"] button[type=submit]')
 
     dump = lambda q: q.evaluate("JSON.stringify(Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])))")
     ca, a = person()
@@ -133,7 +140,7 @@ with sync_playwright() as p:
         fill_data(a, MARK_A)
         fill_data(b, MARK_B)
         da, db = dump(a), dump(b)
-        check('A: все свои записи сохранены (задача, событие, проект, список, пункт)', all(m in da for m in MARK_A))
+        check('A: все свои записи сохранены (задача, событие, проект, список, пункт, ожидание, повтор)', all(m in da for m in MARK_A))
         check('B: все свои записи сохранены', all(m in db for m in MARK_B))
         check('A не содержит ни одной записи B', not any(m in da for m in MARK_B))
         check('B не содержит ни одной записи A', not any(m in db for m in MARK_A))

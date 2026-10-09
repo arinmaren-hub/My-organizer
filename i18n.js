@@ -13,6 +13,7 @@
 
 import { KEYS } from './storage.js';
 import { parseDateKey, isDateKey, isDateTime, timeOf } from './dates.js';
+import { RU4, EN4, NAMES } from './i18n-v4.js';
 
 export const LANGS = ['ru', 'en'];
 // Each language is named in its own language, as is usual.
@@ -58,6 +59,12 @@ const MON = {
   ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 };
+
+// Calendar names in the current language (month 1–12; weekday 0 = Monday).
+export const monthName = m => NAMES.months[lang][m - 1];
+export const monthShort = m => NAMES.monthsShort[lang][m - 1];
+export const weekdayShort = i => NAMES.weekdaysShort[lang][i];
+export const weekdayLong = i => NAMES.weekdaysLong[lang][i];
 
 // 'пт, 9 окт' / 'Fri, 9 Oct'
 export function formatDay(key) {
@@ -280,6 +287,7 @@ const RU = {
   'what.task': 'Задача', 'what.project': 'Проект', 'what.milestone': 'Этап', 'what.list': 'Список', 'what.item': 'Пункт',
   'what.event': 'Событие', 'what.record': 'Запись',
   'err.deletedNotFound': 'удалённая запись не найдена',
+  'err.restoreOpenExists': 'У этой повторяющейся задачи уже есть другое открытое повторение. Сначала выполните или удалите его, затем восстановите это.',
   'err.unknownCollection': 'неизвестный тип записи',
   'err.unknownPlanKind': 'неизвестный вариант даты',
   'err.needTitle': 'нужно название',
@@ -572,6 +580,7 @@ const EN = {
   'what.task': 'Task', 'what.project': 'Project', 'what.milestone': 'Milestone', 'what.list': 'List', 'what.item': 'Item',
   'what.event': 'Event', 'what.record': 'Record',
   'err.deletedNotFound': 'deleted record not found',
+  'err.restoreOpenExists': 'This recurring task already has another open occurrence. Finish or delete it first, then restore this one.',
   'err.unknownCollection': 'unknown record type',
   'err.unknownPlanKind': 'unknown date option',
   'err.needTitle': 'a title is needed',
@@ -669,6 +678,10 @@ const EN = {
   'data.privacy': 'Your data is stored only in this browser on this device and is not sent anywhere. It belongs to the address {address}: at any other address the app will not see it.'
 };
 
+// Texts of 0.4.0 live in i18n-v4.js (plain data) and are merged here.
+Object.assign(RU, RU4);
+Object.assign(EN, EN4);
+
 export const DICTS = { ru: RU, en: EN };
 
 // Extra texts added by later modules (planning day, onboarding) register here.
@@ -682,10 +695,17 @@ function resolveParam(v) {
     if ('$stamp' in v) return formatStamp(v.$stamp);
     if ('$day' in v) return formatDay(v.$day);
     if ('$dt' in v) return formatDateTime(v.$dt);
-    if ('$counts' in v) return v.$counts ? t('counts', v.$counts) : t('counts.unreadable');
+    if ('$counts' in v) return v.$counts ? countsText(v.$counts) : t('counts.unreadable');
     if ('key' in v) return msg(v);
   }
   return v == null ? '' : String(v);
+}
+
+// «задач 3, событий 1, …» plus the newer kinds of records, only when there are some.
+export function countsText(c) {
+  let s = t('counts', c);
+  for (const k of ['series', 'waiting', 'templates']) if (c[k]) s += ', ' + t('counts.' + k, { n: c[k] });
+  return s;
 }
 
 export function t(key, params = {}) {

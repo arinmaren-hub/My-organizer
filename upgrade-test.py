@@ -109,6 +109,9 @@ with sync_playwright() as p:
     def use_old_version(tag, q):
         """Real work in the old version: every kind of copy is made by the old code itself."""
         tab = lambda i: q.click(f'nav button >> nth={i}')
+        if q.locator('[data-action="onboarding.skip"]').count():      # 0.3.0 asks about the day first
+            q.click('[data-action="onboarding.skip"]')
+            q.wait_for_selector('nav button')
         q.fill('form[data-form="task.quickAdd"] textarea', f'{tag}-добавлена в {OLD_V}')
         q.click('form[data-form="task.quickAdd"] button[type=submit]')       # first change today → daily copy
         tab(2)
@@ -133,8 +136,14 @@ with sync_playwright() as p:
         q.locator('.row:has-text("личная задача 2 ") button[data-action="task.delete"]').first.click()  # soft delete
         return path
 
+    NEW_TASK_DEFAULTS = {'review': None, 'seriesId': None, 'occurrenceDate': None, 'skipped': False, 'doneDay': None}
+
     def records(doc):
-        return {k: doc[k] for k in ('tasks', 'events', 'projects', 'lists', 'quarantine')}
+        out = {k: doc[k] for k in ('tasks', 'events', 'projects', 'lists', 'quarantine')}
+        # 0.4.0 only ADDS fields; a task counts as unchanged when every old field is identical
+        # and every added field still has its empty default.
+        out['tasks'] = [{k: v for k, v in t.items() if not (k in NEW_TASK_DEFAULTS and NEW_TASK_DEFAULTS[k] == v)} for t in doc['tasks']]
+        return out
 
     def update_to_new(q):
         q.evaluate('navigator.serviceWorker.getRegistration().then(r => r.update())')
@@ -152,7 +161,7 @@ with sync_playwright() as p:
             q.reload(); ready(q)
             people[tag] = {'ctx': c, 'page': q, 'before': dump(q)}
             snaps = json.loads(people[tag]['before'].get('organizer:snapshots') or '[]')
-            reasons = sorted(s['reason'] for s in snaps)
+            reasons = sorted([s['reason'] for s in snaps] + [c['reason'] for c in json.loads(people[tag]['before'].get('organizer:rollback') or '[]')])
             check(f'{tag}: старая версия сделала свои копии (ежедневная, перед импортом, перед восстановлением)',
                   {'daily', 'before-import', 'before-restore'} <= set(reasons), str(reasons))
             check(f'{tag}: в старой версии есть удалённая запись и выполненные задачи',
@@ -184,9 +193,9 @@ with sync_playwright() as p:
             before, after = P['before'], P['after']
             old_raw = before['organizer:data']
             old, new = json.loads(old_raw), json.loads(after['organizer:data'])
-            check(f'{tag}: работает новая версия {NEW_V}, формат данных 3', P['page'].evaluate("import('./version.js').then(m => m.APP_VERSION)") == NEW_V and new['schemaVersion'] == 3)
+            check(f'{tag}: работает новая версия {NEW_V}, формат данных 4', P['page'].evaluate("import('./version.js').then(m => m.APP_VERSION)") == NEW_V and new['schemaVersion'] == 4)
             for k, v in records(old).items():
-                check(f'{tag}: {k} — каждая запись и каждое поле без изменений ({len(v)} шт.)', new[k] == v)
+                check(f'{tag}: {k} — каждая запись и каждое поле без изменений ({len(v)} шт.)', records(new)[k] == records(old)[k])
             check(f'{tag}: настройки вечерней сводки и даты документа сохранены',
                   new['settings']['eveningPreview'] == old['settings']['eveningPreview'] and (new['createdAt'], new['updatedAt']) == (old['createdAt'], old['updatedAt']))
             check(f'{tag}: выполненные, дедлайны, удалённые, повторы на месте',
@@ -194,17 +203,19 @@ with sync_playwright() as p:
                   and sum(bool(t['deletedAt']) for t in new['tasks']) == sum(bool(t['deletedAt']) for t in old['tasks']) and new['events'][0]['repeat'] == old['events'][0]['repeat'])
             rb = json.loads(after.get('organizer:rollback') or '[]')
             mig = [c for c in rb if c['reason'] == 'before-migration']
-            check(f'{tag}: исходный текст сохранён как копия для отката — побайтно', len(mig) == 1 and mig[0]['raw'] == old_raw)
-            old_copies = json.loads(before.get('organizer:snapshots') or '[]')
-            new_copies = json.loads(after.get('organizer:snapshots') or '[]') + [c for c in rb if c['reason'] != 'before-migration']
+            n_mig = 1 if OLD_V < '0.3' else 2        # 0.3.0 already made its own copy when it moved schema 2 → 3
+            mig.sort(key=lambda c: c['at'])
+            check(f'{tag}: исходный текст сохранён как копия для отката — побайтно', len(mig) == n_mig and mig[-1]['raw'] == old_raw)
+            old_copies = json.loads(before.get('organizer:snapshots') or '[]') + json.loads(before.get('organizer:rollback') or '[]')
+            new_copies = json.loads(after.get('organizer:snapshots') or '[]') + rb
             key = lambda c: (c.get('id') or c['at'], c['reason'])
-            check(f'{tag}: все {len(old_copies)} копий старой версии сохранены', sorted(map(key, old_copies)) == sorted(map(key, new_copies)),
+            check(f'{tag}: все {len(old_copies)} копий старой версии сохранены', set(map(key, old_copies)) <= set(map(key, new_copies)),
                   f'{sorted(map(key, old_copies))} vs {sorted(map(key, new_copies))}')
             check(f'{tag}: ни один ключ хранилища не удалён', set(before) <= set(after), str(set(before) - set(after)))
             check(f'{tag}: оформление и сведения устройства не тронуты',
                   after.get('organizer:appearance') == before.get('organizer:appearance') and json.loads(after['organizer:device']).get('lastBackupAt') == json.loads(before['organizer:device']).get('lastBackupAt'))
             check(f'{tag}: сообщение «Данные переведены в новый формат»', 'переведены в новый формат' in P['banners'], P['banners'][:200])
-            check(f'{tag}: после обновления один раз задаются вопросы о дне', P['onboarding'])
+            check(f'{tag}: вопросы о дне: после обновления с 0.2.x задаются один раз, с 0.3.0 не повторяются', P['onboarding'] == (OLD_V < '0.3'))
             other = 'B' if tag == 'A' else 'A'
             check(f'{tag}: в хранилище нет ни одной записи другого человека', f'{other}-личная' not in json.dumps(after, ensure_ascii=False) and f'{other}-' not in after['organizer:data'])
 
@@ -222,9 +233,10 @@ with sync_playwright() as p:
     @step('После вопросов о дне и повторного запуска')
     def _():
         A, B = people['A']['page'], people['B']['page']
-        A.click('[data-action="onboarding.skip"]')
-        B.fill('input[name=bed]', '00:30')
-        B.click('form[data-form="onboarding.save"] button[type=submit]')
+        if OLD_V < '0.3':
+            A.click('[data-action="onboarding.skip"]')
+            B.fill('input[name=bed]', '00:30')
+            B.click('form[data-form="onboarding.save"] button[type=submit]')
         for tag, q in (('A', A), ('B', B)):
             q.wait_for_selector('nav button')
             q.reload(); ready(q)
@@ -233,8 +245,9 @@ with sync_playwright() as p:
             old = json.loads(people[tag]['before']['organizer:data'])
             check(f'{tag}: записи по-прежнему совпадают с данными {OLD_V}', records(new) == records(old))
             rb = json.loads(after['organizer:rollback'])
-            check(f'{tag}: копия перед обновлением не дублируется при перезапуске', sum(c['reason'] == 'before-migration' for c in rb) == 1)
-        check('B: конец дня = время сна (00:30)', json.loads(dump(B)['organizer:data'])['settings']['day']['cutoff'] == '00:30')
+            check(f'{tag}: копия перед обновлением не дублируется при перезапуске', sum(c['reason'] == 'before-migration' for c in rb) == (1 if OLD_V < '0.3' else 2))
+        if OLD_V < '0.3':
+            check('B: конец дня = время сна (00:30)', json.loads(dump(B)['organizer:data'])['settings']['day']['cutoff'] == '00:30')
 
     @step('Откат к данным до обновления')
     def _():
@@ -243,8 +256,8 @@ with sync_playwright() as p:
         q.click('form[data-form="task.quickAdd"] button[type=submit]')
         q.click('nav button >> nth=5')
         row = q.locator('.row:has-text("перед обновлением формата данных")')
-        check('В «Автокопиях» видна копия «перед обновлением формата данных»', row.count() == 1)
-        row.locator('button[data-action="snapshot.restore"]').click()
+        check('В «Автокопиях» видна копия «перед обновлением формата данных»', row.count() == (1 if OLD_V < '0.3' else 2))
+        row.first.locator('button[data-action="snapshot.restore"]').click()
         new = json.loads(q.evaluate("localStorage.getItem('organizer:data')"))
         old = json.loads(people['A']['before']['organizer:data'])
         check('Откат возвращает все записи точно как в старой версии', records(new) == records(old))

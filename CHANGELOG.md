@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.0 — 2026-10-10 — Calendar, reviews, evening overview, waiting, templates, recurring tasks, quick entry
+
+One integrated release. **Your existing data is kept as it is:** the upgrade only adds empty fields and new empty collections; before it writes anything, the exact old text is saved as a rollback copy («перед обновлением формата данных») and a check confirms that every record survived (otherwise the app stays read-only and changes nothing). Same address, same storage keys, same language/appearance/day settings.
+
+**New**
+- **Calendar tab:** Monday-first month grid, previous/next month, month and year picker, optional 12-month year view. Tap a date to see its events, tasks, week tasks, deadlines and repeats, and to add a task or an event to that date. Real calendar dates; your planning day only decides what «today» is.
+- **Morning and evening reviews** of unfinished day and week tasks: tomorrow, another date, this week, no date, keep, done. Nothing moves without a tap; deadlines never change. Decisions are remembered (`review`), so the same question is not asked twice; tasks kept in the evening are listed quietly next morning; unfinished tasks always stay visible under «Уже разобрано».
+- **«Вечер» / Evening overview:** opens by hand at any time, and once per planning day when the time you set has passed (while the app is open — there are no background notifications). Review of unfinished tasks plus tomorrow's events, tasks, deadlines, follow-ups and repeats with quick add/move.
+- **Waiting for others** at the very bottom of «Сегодня»: optional «from whom» and follow-up date; a reminder card on the follow-up day («проверить через 3 дня», «Нужно действие» → task, «Решено»). Not tasks, never overdue.
+- **List templates:** built-in «Супермаркет» and «Чемодан» (Supermarket, Suitcase Packing), editable, with categories; your own templates; «Новый список из шаблона» (all unticked, template unchanged); «Сохранить как шаблон». List items can be edited and deleted.
+- **Recurring tasks** (Tasks tab): daily/weekly/monthly/yearly, every N, counted from completion or on a fixed rhythm; history; pause; edit; no duplicates. The app never decides something was missed because it was not opened: past occurrences wait in «Повторы без подтверждения» for «Сделано», «Сделано в тот день», «Пропустить», «Сегодня».
+- **Quick entry:** a title is enough; one line per task; Russian and English dates (today/tomorrow, weekdays, «до пятницы / by Friday» as a deadline, «15 октября / Oct 15», `15.10`, «через 3 дня / in 3 days», «на этой неделе»). A typed clock time asks «Задача или Событие?». Quantities like `1.5 л` or `2/3 cup` are not read as dates.
+- **Editing** of tasks, events, waiting items and series (✎): title, day/week/no date, time, deadline. Moving a plan never changes the deadline.
+
+**Data format:** schema 4 — collections `series`, `waiting`, `templates`; task fields `review`, `seriesId`, `occurrenceDate`, `skipped`, `doneDay`; optional list `categories` / item `category`. Upgrades from the prototype and from 0.2.0–0.3.0 are automatic. Daily copies (1 per day, latest 5) and rollback copies work as in 0.3.0 and cover the new collections.
+
+**Fixed during development (found by the tests and an independent review):** a morning decision no longer silences the evening question; re-completing a recurring task after an undo no longer skips a date; a skip counts the next date from today; switching a series from «by completion» to «fixed» or restoring a deleted series does not create a flood of past occurrences; «as text» with a week plan no longer rejects the task; `confirmOccurrence` refuses non-recurring tasks; editing quick-entry text while the Task/Event question is open can no longer remove the wrong line; past calendar days no longer show repeats that were never created; restoring a deleted recurring occurrence can no longer leave two open ones.
+
+**Not in this release:** repeating events driven by the same engine, end dates and «2nd Tuesday» rules, Quarterly Cleanup, notifications. See `ROADMAP.md`.
+
+**Tests:** see `TESTING.md`.
+
 ## 0.3.0 — 2026-10-09 — Language, personal planning day, data preservation and privacy
 
 **New: interface language**

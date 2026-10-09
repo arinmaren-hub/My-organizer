@@ -2,13 +2,13 @@
 // records, quarantine, rescued raw data and storage information.
 
 import { esc } from './util.js';
-import { t, msg, has, formatStamp, sizeText } from './i18n.js';
+import { t, msg, has, formatStamp, sizeText, countsText } from './i18n.js';
 import { SCHEMA_VERSION } from './schema.js';
 import { APP_VERSION } from './version.js';
 import { deletedRecords } from './selectors.js';
 import { empty } from './components.js';
 
-const counts = c => (c ? t('counts', c) : t('counts.unreadable'));
+const counts = c => (c ? countsText(c) : t('counts.unreadable'));
 // Snapshot reasons: known ones are translated, anything else is shown as stored.
 const reasonText = r => (has(`snap.${r}`) ? t(`snap.${r}`) : typeof r === 'string' ? r : '');
 // Quarantine entries come from data files: only plain text is shown from them.

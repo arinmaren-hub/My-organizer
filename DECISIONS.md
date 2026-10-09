@@ -3,7 +3,7 @@
 This file is the single list of rules for the app. Both AIs (ChatGPT and Claude) and the owner follow it.
 A rule changes only when this file is edited on purpose, with the date and the reason.
 
-Last updated: 2026-10-09 (app version 0.3.0: language, planning day, privacy rules P1–P8, data-preservation release rules R1–R12)
+Last updated: 2026-10-10 (app version 0.4.0: calendar, reviews, evening preview, waiting, templates, recurring tasks, quick entry; section B10 records what was built and where it differs from the earlier proposals)
 
 ---
 
@@ -41,7 +41,7 @@ Items marked *(proposal — confirm)* below are design choices made by Claude th
 
 ---
 
-## B. Evening Preview — «Сводка на завтра» (confirmed feature, not built yet)
+## B. Evening Preview — «Сводка на завтра» (built in 0.4.0, see B10)
 
 **Goal.** At a time the user chooses (e.g. 21:30), show a short overview of the next day, built locally without AI.
 
@@ -167,7 +167,7 @@ The 30-day and 6-month ages are proposals — confirm or change.
 - Importing a backup or restoring a copy made **before 0.3.0** (no day settings) keeps the current day settings instead of asking again.
 - Deferred: the bedtime suggesting the evening review time (S4). Not covered: schedules where the person sleeps during the day.
 
-## B5. Evening review of unfinished tasks (requirement 11; extends B)
+## B5. Evening review of unfinished tasks (requirement 11; extends B) — built in 0.4.0, see B10
 
 **«Вечер» screen** = 1) review of unfinished tasks, then 2) Tomorrow's Summary (section B).
 - It opens when due, at most once per planning day, and can also be opened by hand.
@@ -195,7 +195,7 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
   - Tasks kept in the evening are listed quietly («Оставлены вчера вечером: N», expandable) instead of being asked again.
 - They come back to the next evening's review, at most once per day, so nothing is forgotten. *(proposal — confirm)*
 
-## B6. Recurring tasks (requirement 12)
+## B6. Recurring tasks (requirement 12) — built in 0.4.0; the «missed» rules below are SUPERSEDED, see B10
 
 **Rules**
 - Every N days.
@@ -218,7 +218,7 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 - Occurrences follow the planning day (B4).
 - The same rule engine (`recurrence.js`) will later drive repeating events (Phase 2). The weekly-only `event.repeat` field is migrated then.
 
-## B7. Waiting for Others — «Ожидаю действия от других» (requirement 13)
+## B7. Waiting for Others — «Ожидаю действия от других» (requirement 13) — built in 0.4.0, see B10
 
 - A section at the **very bottom** of «Сегодня».
 - **Item:** what is awaited; from whom (optional); since when (automatic); optional follow-up date; optional note; optional project.
@@ -231,7 +231,7 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 - «Решено» marks it resolved: hidden and kept. It can later be a Quarterly Cleanup candidate (resolved more than 30 days ago, pre-selected).
 - **Conversions:** a task can become a waiting item («Жду ответа»), and a waiting item a task («Нужно действие»).
 
-## B8. Reusable list templates (requirement 14)
+## B8. Reusable list templates (requirement 14) — built in 0.4.0, see B10
 
 - **Lists gain optional categories** (e.g. «Овощи», «Молочное»), with items grouped under them. Existing lists keep their items uncategorized.
 - **List items can be edited and deleted.** Templates need this; it was bug 10 in the assessment.
@@ -252,6 +252,36 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 - Text the user typed is never translated. Built-in templates use the language active when they were first created.
 - Quick entry understands Russian and English dates in either interface language (decision 2).
 - **Tests fail if** any key is missing in either language, if a raw key would show on screen, or if Russian interface text appears in code outside `i18n.js`.
+
+## B10. What 0.4.0 built (owner's brief of 2026-10-09/10) — decisions and deviations
+
+**Calendar** (`view-calendar.js`, `calendar.js`). Monday-first month grid; previous/next, month and year picker, optional 12-month year view; tapping a date opens its panel (events, tasks of the day, week tasks, repeats, deadlines) with a form to add a task or an event to that date. Indicators: tasks, events, deadline. The calendar shows **real calendar dates**; the personal planning day (B4) only decides what «today» means for tasks, reviews and repeats. Deadlines and events are never shifted by the planning day.
+
+**Reviews (B5).** `task.review = { day, choice, part }`; `part` is `am` (morning review) or `pm` (evening). Rules as built:
+- Nothing moves without a tap. Choices: today (morning only), tomorrow, another date, this week, no date, keep, done. «Всё на завтра» asks first, with the count, and moves only the tasks shown.
+- Morning: unfinished day tasks of past days and week tasks of past weeks. A task decided today (morning or evening) or **kept yesterday evening** is not asked again; it stays listed under «Уже разобрано» so nothing is hidden.
+- Evening: unfinished tasks planned for today or earlier, plus this week's week tasks on the last day (Sunday). A **morning** decision does not silence the evening question (decided after review: a task moved to «today» in the morning is still unfinished in the evening); an **evening** decision does for the rest of that planning day. Tasks kept in the evening come back the next evening. A task kept in the morning is asked again the next morning.
+- Deadlines never change when a plan moves.
+
+**Evening overview** (`view-evening.js`). Opens by hand at any time («Вечер»), and automatically once per planning day when the chosen time has passed (the evening time belongs to the planning day: 01:30 with cutoff 04:00 is still the previous evening). Automatic opening is evaluated only while the app is open (start, return to the app, a 30-second timer; never while typing). **No background notification is promised or sent.** Contents: review of unfinished tasks, then tomorrow's events (real dates), tasks, deadlines, waiting follow-ups and repeats, with quick edit/move.
+
+**Waiting for others (B7).** Separate collection, section at the very bottom of «Сегодня». Optional «from whom» and follow-up date. When the follow-up date arrives (planning day) a card on «Сегодня» offers «проверить через 3 дня», «Нужно действие» (creates a task for today, links `taskId`, marks resolved) and «Решено». Resolved items stay under «Решено» and can be reopened, edited, deleted (soft). They are never tasks and never overdue.
+
+**List templates (B8).** Built-in «Супермаркет» and «Чемодан» (Supermarket, Suitcase Packing) exist **in code**, so nothing is stored for a fresh organizer. Editing or deleting one stores an override/marker record with `base`. «Вернуть стандартные шаблоны» adds new copies. «Новый список из шаблона» copies categories and items with new ids, all unticked; the template never changes. «Сохранить как шаблон» copies a list without ticks. List items can be edited and deleted.
+
+**Recurring tasks (B6 revised).** Daily/weekly/monthly/yearly with an interval ≥ 1. Two modes:
+- *Completion-based:* exactly one open occurrence; the next date is the completion day + interval. If the latest occurrence was skipped or deleted instead, the next is counted from today.
+- *Fixed rhythm:* dates counted from the start date (months and years from the original start, so no drift; 31st → last day of shorter months; 29 Feb → 28 Feb). At most 60 occurrences are created at once; if more were due, only the newest 60 are created and a notice says so.
+- **Supersedes B6's «missed» rule:** the app never decides that an occurrence was missed or skipped because it was not opened. Past open occurrences are **unconfirmed** and shown on «Сегодня» in their own card (not in overdue, not in reviews) with «Сделано», «Сделано в тот день», «Пропустить», «Сегодня». Only the person's tap marks one skipped.
+- Uniqueness: `(seriesId, occurrenceDate)` exists at most once; deleted/skipped ones still count, so nothing is created twice (also after import or with two windows). Deleting the open occurrence of a completion-based series counts as skipping it and the next one appears. Undoing a completion removes the next occurrence only if it is still exactly as the app made it (an app-made empty clone, removed outright so its date is free); a changed one stays. Restoring a deleted open occurrence of a completion-based series removes an untouched app-made open one; if the open one was changed, the restore is refused with a message. The calendar shows not-yet-created repeats only from the planning day on.
+- Editing a series changes future occurrences; «и текущие» also changes open ones. Switching completion → fixed starts from today (no backfill); resuming a paused or restored series does not backfill the pause. History per series shows done / skipped / open. Deleting a series deletes its open occurrences (soft); finished ones stay.
+- No end date or «Nth weekday» rule in 0.4.0 (see ROADMAP).
+
+**Quick entry and editing.** Only a title is required. One line = one task; several lines = several tasks. Russian and English dates are recognised in either interface language: today/tomorrow/day after, «через N дней/in N days», weekdays, «в пятницу», «до пятницы / by Friday» (a **deadline**, the task gets no plan date), «15 октября / Oct 15», `15.10`, `15/10`, ISO dates, «на этой/следующей неделе». The recognised words are removed from the title and the app says which date it understood. A number with a dot or slash followed by a unit (`1.5 л`, `2/3 cup`, `10.5 euro`) is a quantity, not a date. When a clock time is typed, the app asks once: **Задача или Событие** (with «как текст» and «Отмена»); nothing is added before the answer and the text stays in the box. Every task and event can be edited (title, kind, date, time, deadline); moving the plan never changes the deadline.
+
+**Rules that did not change:** all data stays in this browser; no AI, accounts, analytics or paid API; R1–R12 and P1–P8 apply to every new collection (they take part in the lost-records check, backups, imports, rollback copies and two-person isolation tests).
+
+---
 
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
@@ -305,11 +335,11 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 ### Storage keys (`localStorage`)
 | Key | Contents |
 |---|---|
-| `organizer:data` | The main document (schema v2) |
+| `organizer:data` | The main document (schema v4) |
 | `organizer:snapshots` | Daily automatic copies (one per day, latest 5), newest first |
 | `organizer:rollback` | Rollback copies before upgrades, imports and restores (latest 5; pre-upgrade copies keep the exact original text) |
 | `organizer:rescue` | Raw text that could not be read (every distinct text is kept; nothing is dropped) |
-| `organizer:device` | This device only: `lastBackupAt`, `lastDailySnapshot`, `dayFinishedThrough` («Завершить день»), later `lastEveningPreviewShownFor` |
+| `organizer:device` | This device only: `lastBackupAt`, `lastDailySnapshot`, `dayFinishedThrough` («Завершить день»), `lastEveningPreviewShownFor` (the day the evening overview was last opened automatically) |
 | `organizer:appearance` | This device only: `system`, `light` or `dark`. Read early by `boot.js` (read-only) |
 | `organizer:language` | This device only: `ru` or `en`. Read early by `boot.js` (read-only). Not in backups |
 | `arina-organizer-v1` | The prototype's data. **Read once, never written or deleted.** |
@@ -352,11 +382,11 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 
 ---
 
-## D. Data model (schema version 3)
+## D. Data model (schema version 4)
 
-Document: `{ schemaVersion: 3, dataId, createdAt, updatedAt, tasks, events, projects, lists, settings, quarantine }`
+Document: `{ schemaVersion: 4, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, settings, quarantine }`
 
-Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `settings.day` and `dataId`).
+Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `settings.day` and `dataId`), 4 = 0.4.0 (adds the collections `series`, `waiting`, `templates`; task fields `review`, `seriesId`, `occurrenceDate`, `skipped`, `doneDay`; optional list `categories` and item `category`). Every upgrade only ADDS fields with empty defaults; no existing value is changed.
 
 **dataId:** a random id of this organizer, made on first start. It is not personal data. An import compares it to tell «my own backup» from «a backup from another organizer» (another device or another person). An old backup without it continues the current organizer; a backup moved to a new, empty device brings its id along.
 
@@ -371,6 +401,10 @@ Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `
 | `deadline` | `'YYYY-MM-DD'` or null | never changed by rescheduling |
 | `projectId` | string or null | link to a project (Phase 3) |
 | `done`, `completedAt` | boolean, ISO or null | |
+| `doneDay` | `'YYYY-MM-DD'` or null | planning day of completion (recurring tasks count from it) |
+| `review` | `{ day, choice: 'moved'│'kept'│'done', part: 'am'│'pm' }` or null | last morning/evening decision |
+| `seriesId`, `occurrenceDate` | string, date key (or null) | recurring-task link; the pair is unique |
+| `skipped` | boolean | an occurrence skipped on purpose (kept in the history, hidden from lists) |
 | `createdAt`, `updatedAt`, `deletedAt` | ISO, ISO, ISO or null | |
 
 **Event:** `id, title, start ('YYYY-MM-DDTHH:MM'), end (same or null), allDay, repeat (null or { freq: 'weekly', days: [1..7], until, skip: [dates] }), alerts ([{ minutesBefore }]), createdAt, updatedAt, deletedAt`. `repeat` and `alerts` are validated now and used from Phase 2.
@@ -380,6 +414,12 @@ Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `
 **List:** `id, name, items ([{ id, title, done, createdAt, updatedAt, deletedAt }]), createdAt, updatedAt, deletedAt`.
 
 **Settings:** `{ eveningPreview: { enabled, time }, day: { wake, bed, cutoff, setupDone } }` — `wake`/`bed` are `'HH:MM'` or null, `cutoff` is `'HH:MM'` (default `'00:00'`). Each field is validated on its own, so one bad value never resets the others.
+
+**Series** (`series`): `id, title, freq (daily│weekly│monthly│yearly), interval, mode (completion│fixed), startDate, time, paused, generatedThrough, projectId, createdAt, updatedAt, deletedAt`.
+
+**Waiting** (`waiting`): `id, title, from, followUp (date or null), note, resolved, resolvedAt, taskId, createdAt, updatedAt, deletedAt`.
+
+**Template** (`templates`): `id, name, base (id of the built-in it overrides, or null), items [{ id, title, category }], categories [names], createdAt, updatedAt, deletedAt`. Built-in templates live in code (`i18n-v4.js`); a record with `base` is the person's edited copy of a built-in, or (with `deletedAt`) a marker that it was deleted. Markers are never purged.
 
 **Quarantine entry:** `{ at, source: 'load'│'import'│'legacy'│…, collection, parentId, reason, record }`.
 

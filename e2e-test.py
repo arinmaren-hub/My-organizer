@@ -150,9 +150,9 @@ with sync_playwright() as p:
     @step('Календарь')
     def _():
         tab('Календарь')
-        pg.fill('form[data-form="event.add"] input[name=title]', 'Лекция AN1000')
-        pg.fill('form[data-form="event.add"] input[name=start]', f'{TODAY}T10:00')
-        pg.click('form[data-form="event.add"] button[type=submit]')
+        pg.fill('form[data-form="cal.add"] input[name=title]', 'Лекция AN1000')
+        pg.fill('form[data-form="cal.add"] input[name=time]', '10:00')
+        pg.click('form[data-form="cal.add"] button[value=event]')
         check('Календарь: событие создаётся (ошибка 1 исправлена)', 'Лекция AN1000' in main_text() and len(doc()['events']) == 1)
         tab('Сегодня')
         check('Календарь: событие в «Расписании» на сегодня', '10:00 · Лекция AN1000' in main_text())
@@ -189,8 +189,8 @@ with sync_playwright() as p:
         for name in ['Молоко', 'Хлеб']:
             pg.fill('form[data-form="item.add"] input[name=title]', name)
             pg.press('form[data-form="item.add"] input[name=title]', 'Enter')
-        pg.locator('label.row:has-text("Молоко") input').check()
-        check('Списки: пункты добавляются и отмечаются', pg.locator('label.row.is-done:has-text("Молоко")').count() == 1 and 'Хлеб' in main_text())
+        pg.locator('.row:has-text("Молоко") input[type=checkbox]').check()
+        check('Списки: пункты добавляются и отмечаются', pg.locator('.row.is-done:has-text("Молоко")').count() == 1 and 'Хлеб' in main_text())
 
     @step('Фоновая перерисовка')
     def _():
@@ -228,7 +228,7 @@ with sync_playwright() as p:
         pg.reload(); pg.wait_for_function('window.__organizerReady === true')
         check('Разбор: просроченная дневная задача показана', 'Утренний разбор · 1' in main_text())
         check('Разбор: дедлайн виден в строке задачи', 'дедлайн' in pg.inner_text('section.review'))
-        pg.click('section.review button[data-action="task.move"][data-kind="day"]')
+        pg.click('section.review button[data-action="review"][data-choice="today"]')
         check('Разбор: «Сегодня» переносит задачу и разбор исчезает', 'Утренний разбор' not in main_text() and 'Просроченная' in pg.inner_text('main section:has(h2:text-matches("^Сегодня"))'))
         t = [t for t in doc()['tasks'] if t['id'] == 'overdue1'][0]
         check('Разбор: перенос не меняет дедлайн (решение 6)', t['deadline'] == '2026-12-01' and t['plan'] == {'kind': 'day', 'date': TODAY})
@@ -249,7 +249,7 @@ with sync_playwright() as p:
             pg.click('main button[data-action="backup.export"]')
         dl.value.save_as(backup_path)
         data = json.load(open(backup_path, encoding='utf-8'))
-        check('Экспорт: файл скачан, формат резервной копии', data.get('app') == 'organizer' and data.get('kind') == 'backup' and data.get('schemaVersion') == 3)
+        check('Экспорт: файл скачан, формат резервной копии', data.get('app') == 'organizer' and data.get('kind') == 'backup' and data.get('schemaVersion') == 4)
         check('Экспорт: в файле есть id органайзера и нет сведений об устройстве', data['data'].get('dataId') and 'lastBackupAt' not in json.dumps(data))
         check('Экспорт: имя файла с датой', re.match(r'organizer-backup-\d{4}-\d{2}-\d{2}-\d{4}\.json$', dl.value.suggested_filename) is not None, dl.value.suggested_filename)
         check('Экспорт: в файле все данные', len(data['data']['tasks']) == len(doc()['tasks']) and len(data['data']['lists']) == 1 and len(data['data']['projects']) == 1)
