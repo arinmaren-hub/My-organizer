@@ -1,5 +1,5 @@
 import os
-"""Browser tests for 0.5.1 (clean checklists) (headless Chromium, iPhone-sized screen).
+"""Browser tests for 0.5.0 (the calm redesign) (headless Chromium, iPhone-sized screen).
 Usage: python3 e2e-v4-test.py <app_folder> <output_folder>
 Runs every flow twice (Russian, English); a contrast and layout audit runs in both
 languages and both themes. The clock of the page is fixed, so dates are exact.
@@ -69,11 +69,11 @@ CONTRAST_JS = """() => {
 }"""
 
 STR = {
-    'ru': {'cal_month': 'Октябрь 2026', 'wd': 'Пн', 'sun': 'Вс', 'tabs': ['Сегодня', 'Календарь', 'Задачи', 'Списки'], 'weekday': 'Пятница', 'date': '9 октября',
+    'ru': {'gearLabel': 'Настройки и меню', 'cal_month': 'Октябрь 2026', 'wd': 'Пн', 'sun': 'Вс', 'tabs': ['Сегодня', 'Календарь', 'Задачи', 'Списки'], 'weekday': 'Пятница', 'date': '9 октября',
            'edit': 'Изменить', 'move': 'Перенести…', 'dup': 'Дублировать', 'wait': 'Ожидаю от других', 'del': 'Удалить', 'toEvent': 'Сделать событием', 'toTask': 'Сделать задачей',
            'add': 'Добавить', 'buy': 'Купить', 'home': 'Дом', 'out': 'Закончилось', 'low': 'Заканчивается', 'have': 'Есть', 'tails': 'Хвосты', 'prepAdd': 'Добавить подготовку', 'prep': 'Подготовка',
            'rename': 'Переименовать', 'cats': 'Категории', 'saveTpl': 'Сохранить как шаблон', 'blank': 'Пустой список', 'tplManage': 'Шаблоны…'},
-    'en': {'cal_month': 'October 2026', 'wd': 'Mon', 'sun': 'Sun', 'tabs': ['Today', 'Calendar', 'Tasks', 'Lists'], 'weekday': 'Friday', 'date': 'October 9',
+    'en': {'gearLabel': 'Settings and menu', 'cal_month': 'October 2026', 'wd': 'Mon', 'sun': 'Sun', 'tabs': ['Today', 'Calendar', 'Tasks', 'Lists'], 'weekday': 'Friday', 'date': 'October 9',
            'edit': 'Edit', 'move': 'Reschedule…', 'dup': 'Duplicate', 'wait': 'Waiting for others', 'del': 'Delete', 'toEvent': 'Make it an event', 'toTask': 'Make it a task',
            'add': 'Add', 'buy': 'Buy', 'home': 'Home', 'out': 'Out', 'low': 'Running low', 'have': 'In stock', 'tails': 'Tails', 'prepAdd': 'Add preparation', 'prep': 'Preparation',
            'rename': 'Rename', 'cats': 'Categories', 'saveTpl': 'Save as template', 'blank': 'Blank list', 'tplManage': 'Templates…'},
@@ -151,10 +151,10 @@ with sync_playwright() as p:
         def row(self, title):
             return self.pg.locator('#main .row', has_text=title).first
         def more(self, title):
-            row = self.row(title)
-            more = row.locator('.more')
-            if more.count(): more.click()
-            else: row.locator('.ttext').dispatch_event('contextmenu')
+            # task and event rows have no «···» (0.5.0): the actions menu opens on a long press / right click
+            r = self.row(title)
+            if r.locator('.more').count(): r.locator('.more').click()
+            else: r.locator('.ttext').first.click(button='right')
             self.wait_sheet()
         def item(self, label):
             self.pg.locator('#sheet-root .menuitem', has_text=label).first.click()
@@ -206,7 +206,8 @@ with sync_playwright() as p:
         check(L + 'Нижняя панель: прижата к низу экрана и компактна (≤ 70px)', abs(nb['y'] + nb['height'] - 844) < 1.5 and nb['height'] <= 70, str(nb))
         check(L + 'Верхних больших кнопок навигации нет', pg.locator('header button:not(#more-btn):not(#back-btn)').count() == 0)
         check(L + 'Сегодня: слева сверху день недели и плановая дата', pg.inner_text('#app-title') == S['weekday'] and pg.inner_text('#subtitle') == S['date'], pg.inner_text('#top'))
-        check(L + 'Сегодня: справа сверху кнопка настроек', pg.locator('#more-btn').is_visible() and pg.locator('#more-btn svg').count() == 1)
+        check(L + 'Сегодня: справа сверху значок шестерёнки (не «···»)', pg.locator('#more-btn').is_visible() and pg.locator('#more-btn svg').count() == 1 and pg.locator('#more-btn svg circle').count() == 1 and pg.locator('#more-btn svg circle').first.get_attribute('r') == '3')
+        check(L + 'Шестерёнка: подпись для скринридера', pg.get_attribute('#more-btn', 'aria-label') == S['gearLabel'], str(pg.get_attribute('#more-btn', 'aria-label')))
         # order on Today: checklist, tails, waiting
         order = pg.evaluate("""() => { const q = s => document.querySelector(s); const pos = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
           const list = q('#today-list'), tails = q('[data-fold="tails"]'), wait = q('#waiting-section'); return [pos(list, tails), pos(tails, wait), !!list && !!tails && !!wait]; }""")
@@ -369,10 +370,11 @@ with sync_playwright() as p:
         heads = pg.locator('#main h2').all_inner_texts()
         check(L + 'Задачи: три группы (по дням / по неделям / без даты)', len(heads) >= 3, str(heads))
         r = s.row('Позвонить маме')
-        check(L + 'Строка: круглая галочка, название, без «···»', r.locator('input[type=checkbox]').count() == 1 and r.locator('.more').count() == 0 and r.locator('button').count() == 0 and pg.evaluate('(e) => getComputedStyle(e).borderRadius', r.locator('input[type=checkbox]').element_handle()) == '50%')
+        check(L + 'Строка: круглый чекбокс и название, без «···» и других кнопок', r.locator('input[type=checkbox]').count() == 1 and r.locator('.more').count() == 0 and r.locator('button').count() == 0)
+        check(L + 'Строка: чекбокс круглый, разделительной линии между задачами нет', r.locator('input[type=checkbox]').evaluate("e => getComputedStyle(e).borderRadius") in ('50%', '12px') and r.evaluate("e => getComputedStyle(e).borderBottomWidth") == '0px')
         check(L + 'Строка: мелкая дата/срок под названием', 'до' in r.locator('.meta').inner_text() or '20' in r.locator('.meta').inner_text(), r.locator('.meta').inner_text())
         check(L + 'Строка: время видно у задачи со временем', '09:30' in s.row('Купить хлеб').inner_text())
-        check(L + 'Нет постоянных кнопок и форм в группах', pg.locator('#main .group button').count() == 0 and pg.locator('#main .group input:not([type=checkbox])').count() == 0)
+        check(L + 'Нет постоянных кнопок и форм в группах (кроме «···» и чекбоксов)', pg.locator('#main .group button:not(.more)').count() == 0 and pg.locator('#main .group input:not([type=checkbox])').count() == 0)
         # recurring at the bottom, folded
         last = pg.evaluate("() => { const f = document.querySelector('[data-fold=recurring]'); return !!f && !f.nextElementSibling && f.querySelector('.foldbody').hidden; }")
         check(L + 'Повторяющиеся: в самом низу и свёрнуты', last)
@@ -459,7 +461,7 @@ with sync_playwright() as p:
         check(L + 'Вертикальный жест (прокрутка) отступ не создаёт', ind('b') in (None, False))
         s.row('Два').locator('input[type=checkbox]').click()
         check(L + 'Чекбокс по-прежнему работает рядом со свайпом', next(t for t in s.doc()['tasks'] if t['id'] == 'b')['done'] is True)
-        s.more('Три'); check(L + 'Контекстное меню доступно без кнопки', pg.locator('#sheet-root .menuitem').count() >= 5); s.close_sheet()
+        s.more('Три'); check(L + '«···» по-прежнему открывает меню', pg.locator('#sheet-root .menuitem').count() >= 5); s.close_sheet()
         # a day change turns the indented unfinished task into a tail -> cleared
         s.at('2026-10-10T12:00:00+03:00'); pg.wait_for_timeout(300)
         s.reload()
@@ -590,9 +592,9 @@ with sync_playwright() as p:
         pg.click('.cal-grid button[data-date="2026-10-11"]')
         panel = pg.locator('#day-panel')
         check(L + 'День: события и задачи одним компактным списком', panel.locator('.erow').count() == 1 and panel.locator('.trow').count() >= 2)
-        check(L + 'День: нет форм, полей, постоянных кнопок дат и карандашей/крестиков', panel.locator('form, input:not([type=checkbox]), select, textarea').count() == 0 and panel.locator('button:not(.more):not(.foldhead)').count() == 0, panel.inner_html()[:100])
+        check(L + 'День: нет форм, полей, постоянных кнопок дат и карандашей/крестиков', panel.locator('form, input:not([type=checkbox]), select, textarea').count() == 0 and panel.locator('button').count() == 0, panel.inner_html()[:100])
         check(L + 'День: у события нет чекбокса выполнения', panel.locator('.erow input[type=checkbox]').count() == 0)
-        check(L + 'У строк нет лишних «···»', all(panel.locator('.row').nth(i).locator('.more').count() == 0 for i in range(panel.locator('.row').count())))
+        check(L + 'В строках дня нет «···» и кнопок; чекбоксы круглые', panel.locator('.more, button').count() == 0 and all(panel.locator('input[type=checkbox]').nth(i).evaluate("e => getComputedStyle(e).borderRadius") in ('50%', '12px') for i in range(panel.locator('input[type=checkbox]').count())))
         # FAB uses the selected real date
         s.quick('позвонить врачу')
         t = s.tasks('позвонить врачу')[0]
@@ -891,8 +893,8 @@ with sync_playwright() as p:
         check(L + 'Список из шаблона создан, все пункты без отметок', len(lists) == 1 and len(lists[0]['items']) > 10 and all(not i['done'] for i in lists[0]['items']))
         pg.wait_for_selector('#main .foldhead'); 
         check(L + 'Он сразу открыт; категории — сворачиваемые заголовки', pg.locator('#main .foldhead').count() >= 5, str(pg.locator('#main .foldhead').count()))
-        pg.locator('#main .foldbody:visible .row').nth(0).locator('input[type=checkbox]').check()
-        pg.locator('#main .foldbody:visible .row').nth(1).locator('input[type=checkbox]').check()
+        pg.locator('#main .foldbody:visible .row:not(.is-done)').nth(0).locator('input[type=checkbox]').click()
+        pg.locator('#main .foldbody:visible .row:not(.is-done)').nth(0).locator('input[type=checkbox]').click()
         check(L + 'Отметки в списке ставятся', sum(i['done'] for i in s.doc()['lists'][-1]['items']) == 2)
         check(L + 'Шаблон при этом не изменился', s.doc()['templates'] == [])
         s.back(); s.fab(); pg.locator('#sheet-root [data-action="tpl.use"]').first.click()
@@ -1057,6 +1059,74 @@ with sync_playwright() as p:
         b = pg.evaluate("(() => { const r = document.querySelector('#sheet-root button[type=submit]').getBoundingClientRect(); return r.bottom; })()")
         check('Клавиатура (имитация): кнопка «Добавить» выше верхней границы клавиатуры (500px)', b <= 500 + 1, str(b))
         check('Клавиатура (имитация): «＋» и панель скрыты, не мешают', pg.evaluate("getComputedStyle(document.querySelector('#fab')).display") == 'none' or pg.evaluate("document.body.classList.contains('kb-open') || document.documentElement.classList.contains('kb-open')"))
+        s.close()
+
+
+    # =============================================================== completed items sink; simplified rows; gear
+    @flow('ru', 'en')
+    def sort_flow(lang):
+        L = f'[{lang}] '; S = STR[lang]
+        d = doc4(tasks=[task('a', 'Альфа', 'day', '2026-10-09'), task('b', 'Бета', 'day', '2026-10-09'), task('c', 'Гамма', 'day', '2026-10-09'), task('dd', 'Дельта', 'day', '2026-10-09'),
+                        task('o', 'Другой день', 'day', '2026-10-12'), task('n1', 'Без даты 1'), task('n2', 'Без даты 2')],
+                 events=[event('e1', 'Врач', '2026-10-09T15:00')])
+        pi = lambda i, ti: {"id": i, "title": ti, "done": False, "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None}
+        d['events'][0]['prep'] = [pi('p1', 'Паспорт'), pi('p2', 'Билеты')]
+        d['lists'] = [{"id": "l1", "name": "Покупки", "items": [dict(pi('i1', 'Хлеб'), category=None), dict(pi('i2', 'Сыр'), category=None), dict(pi('i3', 'Чай'), category=None)],
+                       "categories": [], "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None}]
+        s = Session(lang, data=d); pg = s.pg
+        today = lambda: pg.locator('#today-list .trow .title').all_inner_texts()
+        tick = lambda title: s.row(title).locator('input[type=checkbox]').click()
+        check(L + 'Сегодня: исходный порядок', today() == ['Альфа', 'Бета', 'Гамма', 'Дельта'], str(today()))
+        tick('Бета')
+        check(L + 'Отметка: выполненная уходит под невыполненные, порядок остальных сохранён', today() == ['Альфа', 'Гамма', 'Дельта', 'Бета'], str(today()))
+        st = pg.evaluate("t => { const r = [...document.querySelectorAll('#today-list .trow')].find(x => x.textContent.includes(t)); const c = getComputedStyle(r.querySelector('.title')); return [r.classList.contains('is-done'), c.textDecorationLine, c.color]; }", 'Бета')
+        check(L + 'Выполненная остаётся видимой, приглушена и зачёркнута', st[0] and 'line-through' in st[1] and st[2] != pg.evaluate("getComputedStyle(document.querySelector('#today-list .trow .title')).color"), str(st))
+        tick('Альфа')
+        check(L + 'Вторая отметка: выполненные внизу, невыполненные по порядку', today() == ['Гамма', 'Дельта', 'Альфа', 'Бета'], str(today()))
+        tick('Бета')
+        check(L + 'Снятие отметки возвращает задачу на прежнее место среди невыполненных', today() == ['Бета', 'Гамма', 'Дельта', 'Альфа'], str(today()))
+        dd = s.doc()
+        check(L + 'Данные: порядок записей и даты не менялись, ничего не удалено', [t['id'] for t in dd['tasks']] == ['a', 'b', 'c', 'dd', 'o', 'n1', 'n2'] and all(t['plan'] == d['tasks'][i]['plan'] for i, t in enumerate(dd['tasks'])) and not any(t['deletedAt'] for t in dd['tasks']))
+        s.reload()
+        check(L + 'После перезапуска порядок тот же', today() == ['Бета', 'Гамма', 'Дельта', 'Альфа'], str(today()))
+        # Tasks tab: inside the date group only
+        s.tab('tasks')
+        tick('Гамма')
+        grp = lambda: pg.locator('#main .group').first.locator('.trow .title').all_inner_texts()
+        check(L + 'Задачи: внутри даты выполненные внизу, другая дата не затронута', grp() == ['Бета', 'Дельта', 'Альфа', 'Гамма', 'Другой день'], str(grp()))
+        check(L + 'Задачи: задача осталась в своей дате', next(t for t in s.doc()['tasks'] if t['id'] == 'c')['plan'] == {'kind': 'day', 'date': '2026-10-09'})
+        tick('Без даты 1')
+        nd = pg.locator('#main .group').nth(2).locator('.trow .title').all_inner_texts()
+        check(L + 'Задачи: группа без даты — то же правило', nd == ['Без даты 2', 'Без даты 1'], str(nd))
+        s.tab('today')
+        check(L + 'Сегодня и Задачи согласованы', today() == ['Бета', 'Дельта', 'Альфа', 'Гамма'], str(today()))
+        # ordinary list
+        s.tab('lists'); pg.locator('.indexrow', has_text='Покупки').click(); pg.wait_for_selector('#main .irow')
+        items = lambda: pg.locator('#main .irow .title').all_inner_texts()
+        check(L + 'Список: исходный порядок', items() == ['Хлеб', 'Сыр', 'Чай'], str(items()))
+        pg.locator('#main .irow', has_text='Хлеб').locator('input[type=checkbox]').click()
+        check(L + 'Список: отмеченный пункт ушёл вниз', items() == ['Сыр', 'Чай', 'Хлеб'], str(items()))
+        pg.locator('#main .irow', has_text='Хлеб').locator('input[type=checkbox]').click()
+        check(L + 'Список: снятая отметка вернула пункт на место', items() == ['Хлеб', 'Сыр', 'Чай'], str(items()))
+        check(L + 'Список: порядок в данных не менялся', [i['title'] for i in s.doc()['lists'][0]['items']] == ['Хлеб', 'Сыр', 'Чай'])
+        check(L + 'Экран списка: в шапке «···» списка (три точки), не шестерёнка', pg.locator('#more-btn svg circle').count() == 3)
+        s.back()
+        # preparation list keeps its order and behaviour
+        s.tab('today'); s.open_title('Врач')
+        if pg.locator('#sheet-root [data-fold=prep] .foldbody').is_hidden(): pg.locator('#sheet-root [data-fold=prep] .foldhead').click()
+        pg.locator('#sheet-root .prow', has_text='Паспорт').locator('input[type=checkbox]').click()
+        pr = pg.locator('#sheet-root .prow .title').all_inner_texts()
+        check(L + 'Подготовка к событию: порядок не меняется при отметке', pr == ['Паспорт', 'Билеты'], str(pr))
+        s.close_sheet()
+        # opening the actions menu without a visible button
+        s.row('Бета').locator('.ttext').first.click(button='right'); s.wait_sheet()
+        check(L + 'Правый клик / долгое нажатие по задаче открывает меню действий', pg.locator('#sheet-root .menuitem').count() >= 5)
+        s.close_sheet()
+        s.open_title('Бета')
+        pg.click('#sheet-root [data-action="menu.task"]'); s.wait_sheet()
+        check(L + 'В окне правки есть кнопка «Действия» — меню доступно и без долгого нажатия', pg.locator('#sheet-root .menuitem').count() >= 5)
+        s.close_sheet()
+        check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
         s.close()
 
     # =============================================================== fixes after the independent review

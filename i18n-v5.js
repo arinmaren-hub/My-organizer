@@ -2,7 +2,7 @@
 // (tests.js checks that). Merged into the dictionaries by i18n.js; a key here overrides an older one.
 
 export const RU5 = {
-  'aria.menu': 'Меню', 'aria.more': 'Действия', 'fab.add': 'Добавить',
+  'aria.menu': 'Меню', 'aria.appMenu': 'Настройки и меню', 'aria.more': 'Действия', 'fab.add': 'Добавить',
   'menu.title': 'Меню', 'menu.evening': 'Вечер', 'menu.data': 'Копии и данные', 'menu.about': 'О приложении',
   'menu.move': 'Перенести…', 'menu.duplicate': 'Дублировать', 'menu.toWaiting': 'Ожидаю от других',
   'menu.toEvent': 'Сделать событием', 'menu.toTask': 'Сделать задачей', 'menu.open': 'Открыть',
@@ -38,24 +38,24 @@ export const RU5 = {
   'confirm.deleteItem': 'Убрать пункт? Он исчезнет из списка; отдельно его вернуть нельзя (до 30 дней он остаётся в данных, а копии и экспорт его сохраняют).',
   'stock.have': 'Есть', 'stock.low': 'Заканчивается', 'stock.out': 'Закончилось',
   // messages that pointed to the old «Данные» tab now name the menu path
-  'confirm.delete': 'Удалить? Восстановить можно в меню «···» → «Копии и данные» в течение 30 дней.',
-  'notice.snapshotUnreadable': 'Не удалось создать автоматическую копию: хранилище автокопий не читается. Сделайте экспорт в меню «···» → «Копии и данные».',
-  'notice.snapshotNoSpace': 'Не удалось создать автоматическую копию (мало места). Сделайте экспорт в меню «···» → «Копии и данные».',
-  'notice.storageOdd': 'Хранилище повело себя неожиданно при записи. Сделайте экспорт в меню «···» → «Копии и данные».',
-  'notice.recoveredEmpty': 'Основные данные не читаются ({reason}), автоматических копий нет. Начат пустой органайзер — импортируйте последний экспорт в меню «···» → «Копии и данные».',
-  'notice.rescueSaved': 'Исходный повреждённый текст сохранён отдельно: «···» → «Копии и данные» → «Повреждённые данные».',
-  'notice.loadQuarantined': '{n} запис(ь/и) не прошли проверку и отложены в карантин («···» → «Копии и данные» → «Карантин»). Остальное загружено.',
-  'notice.importDone': 'Импорт выполнен. Прежние данные сохранены в автокопиях («···» → «Копии и данные» → «Автокопии»).',
-  'notice.otherWindowPending': 'Данные изменены в другом окне, но здесь есть несохранённые изменения. Они оставлены как есть: сохраните копию в меню «···» → «Копии и данные».',
-  'ro.rescueFailed': 'не удалось отдельно сохранить повреждённые данные, поэтому запись отключена, чтобы их не перезаписать. Скачайте их в меню «···» → «Копии и данные».',
-  'confirm.dropRollback': 'Хранятся последние 5 копий для отката. Чтобы сохранить текущее состояние, будет удалена самая старая из них (от {at}) — таких данных больше нет ни в одной копии. Если она может понадобиться, нажмите «Отмена» и сначала скачайте её в «···» → «Копии и данные» → «Автокопии». Продолжить?',
-  'ro.upgradeFailed': 'новая версия не смогла безопасно прочитать сохранённые данные, поэтому обновление данных остановлено. Ничего не изменено и не удалено. Скачайте исходные данные в меню «···» → «Копии и данные» и сообщите о проблеме.',
-  'ro.upgradeNoCopy': 'не хватило места, чтобы перед обновлением формата сохранить копию прежних данных, поэтому обновление остановлено. Ничего не изменено. Скачайте исходные данные в меню «···» → «Копии и данные»; после этого можно продолжить обновление без копии.',
-  'notice.upgraded': 'Данные переведены в новый формат (версия {from} → {to}). Копия прежних данных сохранена: «···» → «Копии и данные» → «Автокопии».'
+  'confirm.delete': 'Удалить? Восстановить можно в меню ⚙ → «Копии и данные» в течение 30 дней.',
+  'notice.snapshotUnreadable': 'Не удалось создать автоматическую копию: хранилище автокопий не читается. Сделайте экспорт в меню ⚙ → «Копии и данные».',
+  'notice.snapshotNoSpace': 'Не удалось создать автоматическую копию (мало места). Сделайте экспорт в меню ⚙ → «Копии и данные».',
+  'notice.storageOdd': 'Хранилище повело себя неожиданно при записи. Сделайте экспорт в меню ⚙ → «Копии и данные».',
+  'notice.recoveredEmpty': 'Основные данные не читаются ({reason}), автоматических копий нет. Начат пустой органайзер — импортируйте последний экспорт в меню ⚙ → «Копии и данные».',
+  'notice.rescueSaved': 'Исходный повреждённый текст сохранён отдельно: ⚙ → «Копии и данные» → «Повреждённые данные».',
+  'notice.loadQuarantined': '{n} запис(ь/и) не прошли проверку и отложены в карантин (⚙ → «Копии и данные» → «Карантин»). Остальное загружено.',
+  'notice.importDone': 'Импорт выполнен. Прежние данные сохранены в автокопиях (⚙ → «Копии и данные» → «Автокопии»).',
+  'notice.otherWindowPending': 'Данные изменены в другом окне, но здесь есть несохранённые изменения. Они оставлены как есть: сохраните копию в меню ⚙ → «Копии и данные».',
+  'ro.rescueFailed': 'не удалось отдельно сохранить повреждённые данные, поэтому запись отключена, чтобы их не перезаписать. Скачайте их в меню ⚙ → «Копии и данные».',
+  'confirm.dropRollback': 'Хранятся последние 5 копий для отката. Чтобы сохранить текущее состояние, будет удалена самая старая из них (от {at}) — таких данных больше нет ни в одной копии. Если она может понадобиться, нажмите «Отмена» и сначала скачайте её в ⚙ → «Копии и данные» → «Автокопии». Продолжить?',
+  'ro.upgradeFailed': 'новая версия не смогла безопасно прочитать сохранённые данные, поэтому обновление данных остановлено. Ничего не изменено и не удалено. Скачайте исходные данные в меню ⚙ → «Копии и данные» и сообщите о проблеме.',
+  'ro.upgradeNoCopy': 'не хватило места, чтобы перед обновлением формата сохранить копию прежних данных, поэтому обновление остановлено. Ничего не изменено. Скачайте исходные данные в меню ⚙ → «Копии и данные»; после этого можно продолжить обновление без копии.',
+  'notice.upgraded': 'Данные переведены в новый формат (версия {from} → {to}). Копия прежних данных сохранена: ⚙ → «Копии и данные» → «Автокопии».'
 };
 
 export const EN5 = {
-  'aria.menu': 'Menu', 'aria.more': 'Actions', 'fab.add': 'Add',
+  'aria.menu': 'Menu', 'aria.appMenu': 'Settings and menu', 'aria.more': 'Actions', 'fab.add': 'Add',
   'menu.title': 'Menu', 'menu.evening': 'Evening', 'menu.data': 'Backups and data', 'menu.about': 'About',
   'menu.move': 'Reschedule…', 'menu.duplicate': 'Duplicate', 'menu.toWaiting': 'Waiting for others',
   'menu.toEvent': 'Make it an event', 'menu.toTask': 'Make it a task', 'menu.open': 'Open',
@@ -91,18 +91,18 @@ export const EN5 = {
   'confirm.deleteItem': 'Remove this item? It disappears from the list and cannot be brought back on its own (for 30 days it stays in the data, and copies and exports keep it).',
   'stock.have': 'In stock', 'stock.low': 'Running low', 'stock.out': 'Out',
   // messages that pointed to the old Data tab now name the menu path
-  'confirm.delete': 'Delete? You can restore it in “···” → “Backups and data” within 30 days.',
-  'notice.snapshotUnreadable': 'Could not make an automatic copy: the automatic-copies area cannot be read. Save a backup in “···” → “Backups and data”.',
-  'notice.snapshotNoSpace': 'Could not make an automatic copy (not enough space). Save a backup in “···” → “Backups and data”.',
-  'notice.storageOdd': 'Storage behaved unexpectedly while saving. Save a backup in “···” → “Backups and data”.',
-  'notice.recoveredEmpty': 'The main data cannot be read ({reason}) and there are no automatic copies. An empty organizer was started — import your latest backup in “···” → “Backups and data”.',
-  'notice.rescueSaved': 'The original damaged text was kept separately: “···” → “Backups and data” → “Damaged data”.',
-  'notice.loadQuarantined': '{n} record(s) did not pass the check and went to quarantine (“···” → “Backups and data” → “Quarantine”). Everything else was loaded.',
-  'notice.importDone': 'Import done. The previous data was kept in automatic copies (“···” → “Backups and data” → “Automatic copies”).',
-  'notice.otherWindowPending': 'Data was changed in another window, but this window has unsaved changes. They were kept as they are: save a backup in “···” → “Backups and data”.',
-  'ro.rescueFailed': 'the damaged data could not be kept separately, so writing is switched off to avoid overwriting it. Download it in “···” → “Backups and data”.',
-  'confirm.dropRollback': 'The latest 5 rollback copies are kept. To keep the current state, the oldest of them (from {at}) will be removed — its data is not in any other copy. If you might need it, tap “Cancel” and first download it in “···” → “Backups and data” → “Automatic copies”. Continue?',
-  'ro.upgradeFailed': 'the new version could not read the saved data safely, so the data upgrade was stopped. Nothing was changed or deleted. Download the original data in “···” → “Backups and data” and report the problem.',
-  'ro.upgradeNoCopy': 'there was not enough space to keep a copy of the previous data before upgrading its format, so the upgrade was stopped. Nothing was changed. Download the original data in “···” → “Backups and data”; after that you can continue the upgrade without the copy.',
-  'notice.upgraded': 'Your data was moved to the new format (version {from} → {to}). A copy of the previous data is kept in “···” → “Backups and data” → “Automatic copies”.'
+  'confirm.delete': 'Delete? You can restore it in ⚙ → “Backups and data” within 30 days.',
+  'notice.snapshotUnreadable': 'Could not make an automatic copy: the automatic-copies area cannot be read. Save a backup in ⚙ → “Backups and data”.',
+  'notice.snapshotNoSpace': 'Could not make an automatic copy (not enough space). Save a backup in ⚙ → “Backups and data”.',
+  'notice.storageOdd': 'Storage behaved unexpectedly while saving. Save a backup in ⚙ → “Backups and data”.',
+  'notice.recoveredEmpty': 'The main data cannot be read ({reason}) and there are no automatic copies. An empty organizer was started — import your latest backup in ⚙ → “Backups and data”.',
+  'notice.rescueSaved': 'The original damaged text was kept separately: ⚙ → “Backups and data” → “Damaged data”.',
+  'notice.loadQuarantined': '{n} record(s) did not pass the check and went to quarantine (⚙ → “Backups and data” → “Quarantine”). Everything else was loaded.',
+  'notice.importDone': 'Import done. The previous data was kept in automatic copies (⚙ → “Backups and data” → “Automatic copies”).',
+  'notice.otherWindowPending': 'Data was changed in another window, but this window has unsaved changes. They were kept as they are: save a backup in ⚙ → “Backups and data”.',
+  'ro.rescueFailed': 'the damaged data could not be kept separately, so writing is switched off to avoid overwriting it. Download it in ⚙ → “Backups and data”.',
+  'confirm.dropRollback': 'The latest 5 rollback copies are kept. To keep the current state, the oldest of them (from {at}) will be removed — its data is not in any other copy. If you might need it, tap “Cancel” and first download it in ⚙ → “Backups and data” → “Automatic copies”. Continue?',
+  'ro.upgradeFailed': 'the new version could not read the saved data safely, so the data upgrade was stopped. Nothing was changed or deleted. Download the original data in ⚙ → “Backups and data” and report the problem.',
+  'ro.upgradeNoCopy': 'there was not enough space to keep a copy of the previous data before upgrading its format, so the upgrade was stopped. Nothing was changed. Download the original data in ⚙ → “Backups and data”; after that you can continue the upgrade without the copy.',
+  'notice.upgraded': 'Your data was moved to the new format (version {from} → {to}). A copy of the previous data is kept in ⚙ → “Backups and data” → “Automatic copies”.'
 };

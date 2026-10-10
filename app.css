@@ -209,7 +209,7 @@ nav#nav[hidden] { display: none; }
 .trow, .erow, .wrow, .srow, .tailrow { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: padding-left .15s ease; }
 .trow.swiping { transition: none; }
 .trow.indent { padding-left: 28px; }
-.trow input[type=checkbox], .irow input[type=checkbox], .prow input[type=checkbox] { margin: 0; }
+.trow input[type=checkbox], .irow input[type=checkbox] { margin: 0; }
 .ttext { min-width: 0; cursor: pointer; flex: 1; }
 .ttext .title { font-size: 17px; }
 .meta { font-size: 13px; color: var(--muted); margin-top: 1px; }
@@ -278,24 +278,13 @@ h3.sub { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 
 .sheet .editform .field input:not([type=checkbox]), .sheet .editform .field select { max-width: 62%; }
 @media (max-width: 380px) { .sheet .editform .field { flex-direction: column; align-items: stretch; gap: 4px; } .sheet .editform .field input:not([type=checkbox]), .sheet .editform .field select { max-width: 100%; } }
 
-/* 0.5.1 — calm checklist rows: no lines or repeated action buttons. */
-.trow, .erow, .irow, .tailrow { border-bottom: none; }
-/* Circle controls only for ordinary tasks and lists. Event preparation stays as it was. */
+/* 0.5.0 (2): calmer task rows — no divider lines (spacing only), round checkboxes, no per-row «···» */
+.trow, .erow, .tailrow { border-bottom: none; min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
+.tailrow { margin-bottom: 8px; }
 .trow input[type=checkbox], .irow input[type=checkbox] {
-  -webkit-appearance: none; appearance: none;
-  width: 25px; height: 25px; min-width: 25px; min-height: 25px;
-  border: 2px solid var(--muted); border-radius: 50%;
-  background: transparent; display: inline-grid; place-items: center;
-  cursor: pointer; position: relative;
-}
-.trow input[type=checkbox]:checked, .irow input[type=checkbox]:checked {
-  border-color: var(--accent); background: var(--accent);
-}
+  -webkit-appearance: none; appearance: none; position: relative; width: 24px; height: 24px; border-radius: 50%;
+  border: 1.5px solid var(--muted); background: transparent; margin: 0; flex: none; cursor: pointer; }
+.trow input[type=checkbox]:checked, .irow input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
 .trow input[type=checkbox]:checked::after, .irow input[type=checkbox]:checked::after {
-  content: ""; width: 6px; height: 11px;
-  border: solid var(--on-accent); border-width: 0 2px 2px 0;
-  transform: translateY(-1px) rotate(45deg);
-}
-.trow input[type=checkbox]:focus-visible, .irow input[type=checkbox]:focus-visible {
-  outline: 2px solid var(--focus); outline-offset: 3px;
-}
+  content: ''; position: absolute; left: 7px; top: 3px; width: 5px; height: 10px; box-sizing: content-box;
+  border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }

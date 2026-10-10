@@ -10,7 +10,7 @@ export const ICONS = {
   lists: svg('<path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="5" cy="6.5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="17.5" r="1"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   more: svg('<circle cx="5.5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18.5" cy="12" r="1.2" fill="currentColor"/>'),
-  settings: svg('<circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.7"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.93 4.93l1.78 1.78M17.29 17.29l1.78 1.78M19.07 4.93l-1.78 1.78M6.71 17.29l-1.78 1.78"/>'),
+  gear: svg('<circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.4 2.2 2.6-.5.9 2.5 2.5.9-.5 2.6L21.1 12l-2.2 1.4.5 2.6-2.5.9-.9 2.5-2.6-.5L12 21.2l-1.4-2.2-2.6.5-.9-2.5-2.5-.9.5-2.6L2.9 12l2.2-1.4-.5-2.6 2.5-.9.9-2.5 2.6.5z"/>'),
   back: svg('<path d="M14.5 5l-7 7 7 7"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   chevron: svg('<path d="M9.5 5l7 7-7 7"/>')

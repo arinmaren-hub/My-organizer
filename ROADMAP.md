@@ -8,7 +8,7 @@ Each release is small, changes the data format at most once, keeps all existing 
 |---|---|---|---|---|
 | S1 + S2 | 0.3.0 | Interface language RU / EN; planning day and onboarding; data-preservation safeguards; privacy checks | schema 3 | **released** (installed) |
 | S3–S8 + calendar | 0.4.0 | Task editing; morning/evening reviews with memory; evening overview; smart quick entry; waiting for others; list templates and categories; recurring tasks; interactive calendar | schema 4: `series`, `waiting`, `templates`, task and list fields | **released** (installed) |
-| UX | 0.5.0 | Calm redesign: 4 bottom tabs, «···» menus, «＋» multi-line entry, sheets instead of inline forms, indent by swipe, Lists index + Дом/Купить inventory, compact calendar, task ↔ event conversion, event preparation | none (schema 4; optional fields only) | **built and tested in Chromium, waiting for the owner's review and a real-iPhone check** |
+| UX | 0.5.0 | Calm redesign: 4 bottom tabs, ⚙ menu, quiet rows (long-press actions), finished items last, «＋» multi-line entry, sheets instead of inline forms, indent by swipe, Lists index + Дом/Купить inventory, compact calendar, task ↔ event conversion, event preparation | none (schema 4; optional fields only) | **built and tested in Chromium, waiting for the owner's review and a real-iPhone check** |
 | next | — | Repeating events on the same engine (and the `.ics`/alerts work), recurrence end dates and «2nd Tuesday» rules, Phase 3 projects, Quarterly Cleanup (B3) | as designed | not started |
 
 

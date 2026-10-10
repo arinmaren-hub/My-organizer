@@ -1,10 +1,3 @@
-## 0.5.1 verification notes (10 October 2026)
-
-- Source syntax checked using Node.js.
-- JavaScript unit tests: 310/310 in a Node.js test harness with mocked DOM and local file responses. This is not equivalent to real Chromium, Safari or iPhone testing.
-- 0.5.0 browser suites have been adjusted for intentional removal of per-row ellipsis buttons but were not run in this environment.
-- **Manual iPhone checks before relying on 0.5.1:** settings gear opens settings menu; tap task text to edit; hold task/event to open actions; task and list checks are round; unfinished entries appear above finished within the same day/category; unchecking returns to earlier position; event preparation order remains untouched; data/backup, offline operation and Russian/English still work.
-
 # TESTING.md — version 0.5.0
 
 ## 1. What was actually tested (2026-10-10, by Claude)
@@ -15,8 +8,8 @@ Results are from the final code (after the last change to `sw.js`):
 
 | Test set | Result | Notes |
 |---|---|---|
-| `tests.html` — unit tests | **306 / 306 passed** in each of four time zones | UTC, America/Los_Angeles, Asia/Tokyo, Pacific/Kiritimati (UTC+14). 55 new tests for 0.5.0 (quick entry rules, indent, home inventory, templates, conversion, prep list, review fixes). Console lines like «Records would be lost while loading» during this run are the tests deliberately feeding broken data. |
-| `e2e-v5-test.py` — new click-through of the 0.5.0 interface | **677 / 677 passed** | Russian first, then the same flows in English. Four tabs, «···» menu, Today layout, «＋» multi-line entry, row menus, reschedule, swipe indent, Lists index, Купить, Дом, list screens, templates, calendar, task↔event conversion, Подготовка, reviews, waiting, recurring, backups, language and theme switching, contrast audit. |
+| `tests.html` — unit tests | **308 / 308 passed** in each of four time zones | UTC, America/Los_Angeles, Asia/Tokyo, Pacific/Kiritimati (UTC+14). 57 new tests for 0.5.0 (quick entry rules, indent, home inventory, templates, conversion, prep list, review fixes). Console lines like «Records would be lost while loading» during this run are the tests deliberately feeding broken data. |
+| `e2e-v5-test.py` — new click-through of the 0.5.0 interface | **721 / 721 passed** | Russian first, then the same flows in English. Four tabs, ⚙ menu, simplified rows, finished items sinking, Today layout, «＋» multi-line entry, row menus, reschedule, swipe indent, Lists index, Купить, Дом, list screens, templates, calendar, task↔event conversion, Подготовка, reviews, waiting, recurring, backups, language and theme switching, contrast audit. |
 | `e2e-test.py` — legacy scenario | **125 / 125 passed** | Ported to the 0.5.0 navigation. Includes the «Обновление версии» step. |
 | `privacy-test.py` — two independent browser contexts | **38 / 38 passed** | Server saw only `GET` requests for the app's own files. |
 | `upgrade-test.py` — real service-worker update | **47 / 47** (0.2.0), **47 / 47** (0.2.1), **47 / 47** (0.2.2), **46 / 46** (0.3.0), **45 / 45** (0.4.0) → 0.5.0 | Two people upgraded side by side from the real old builds. |
@@ -89,13 +82,14 @@ A version is **not published** unless every line is ticked:
 **Before updating to 0.5.0:** «Данные → Сохранить копию» and keep the file outside the app (see README).
 
 **After updating (about 20 minutes).**
-- [ ] `https://…/tests.html` in Safari: «306 из 306 тестов пройдено».
-- [ ] In the app: «Доступна новая версия» → «Обновить». All tasks, events, lists, projects are still there. «···» → «Копии и данные» shows the new version number.
+- [ ] `https://…/tests.html` in Safari: «308 из 308 тестов пройдено».
+- [ ] In the app: «Доступна новая версия» → «Обновить». All tasks, events, lists, projects are still there. ⚙ → «Копии и данные» shows the new version number.
 - [ ] **Bottom bar:** exactly four tabs — Сегодня, Календарь, Задачи, Списки. Not hidden behind the home indicator.
-- [ ] **«···» in the header** opens the menu (Копии и данные, Настройки, …); the bottom bar and content do not jump.
+- [ ] **The ⚙ gear in the header** opens the menu (Копии и данные, Настройки, …); the bottom bar and content do not jump. Inside a list the header shows «···» (the list's own menu).
 - [ ] **Сегодня:** the checklist on top; «Хвосты» folded; «Вечер» link; «Ожидаю от других» at the bottom; the backup chip appears only when a copy is due.
 - [ ] **«＋» quick entry:** open it, the keyboard appears and the text field stays visible above it. Type two lines («купить молоко завтра» and «позвонить маме»); both are added; the dates match the message.
-- [ ] **A task row:** tap the checkbox (done, tap again to undo); tap «···»: Перенести, Изменить, Сделать событием, Удалить; «Удалить» is readable in light and dark.
+- [ ] **A task row:** round checkbox, title, small date/time; no «···» and no divider lines. Tap the checkbox: the task goes below the unfinished ones, muted and struck through; tap again: it returns to its place. **Long press** the row: Перенести, Изменить, Сделать событием, Удалить («Удалить» readable in light and dark). Tap the title, then «Действия»: the same menu. The long press must not tick the box and must not scroll.
+- [ ] **Finished items sink** in Сегодня, Задачи (inside each date) and an ordinary list in Списки; close and reopen the app: same order. The event «Подготовка» list keeps its order when you tick an item.
 - [ ] **Перенести** a task that has a deadline: the deadline stays.
 - [ ] **Swipe a row right** to indent it once, left to remove the indent; the page does not scroll sideways; a long press opens the row menu and does not tick the box.
 - [ ] **Списки:** the index shows «Купить» and «Дом»; open «Дом», cycle an item through its three states; open a list with categories, fold/unfold one; add an item with the keyboard open.

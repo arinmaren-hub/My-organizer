@@ -51,10 +51,10 @@ All on the final files, in headless Chromium 141 (Playwright 1.56), served over 
 
 | Test | What it covers | Result |
 |---|---|---|
-| `tests.html` (unit) | 306 tests, incl. «Приватность» and «Сохранность данных при обновлении»; four time zones | 306 / 306 |
+| `tests.html` (unit) | 308 tests, incl. «Приватность» and «Сохранность данных при обновлении»; four time zones | 308 / 308 |
 | `privacy-test.py` | two independent browser contexts, logging server, storage surfaces, offline cache, CSP blocking, foreign backup, crafted backup | 38 / 38 checks |
 | `upgrade-test.py` | real service-worker update 0.2.0, 0.2.1, 0.2.2, 0.3.0, 0.4.0 → 0.5.0 with two people side by side | 47 / 47 (0.2.x), 46 / 46 (0.3.0), 45 / 45 (0.4.0) |
-| `e2e-test.py`, `e2e-v5-test.py` | the whole app clicked through in both languages | 125 / 125 and 677 / 677 checks |
+| `e2e-test.py`, `e2e-v5-test.py` | the whole app clicked through in both languages | 125 / 125 and 721 / 721 checks |
 | Independent code review | a separate agent reviewed storage, conversion, Home, lists and the service worker | no data-loss or privacy defects; 3 wrong-behavior findings fixed, 2 limits documented (`TESTING.md`) |
 
 **Service-worker install (0.5.0):** each file is fetched as `file?v=VERSION` (bypassing HTTP cache), fully read, the downloaded `version.js` must contain the expected version, and only then is everything stored. A half-uploaded site or a stale CDN copy therefore cannot produce a mixed offline cache; the install fails and the previous version keeps working. Limit: it does not prove that every other file is the new one (see `TESTING.md`). No network code touches personal data.

@@ -2,8 +2,9 @@
 // through esc(); every interface text comes from i18n.js. Buttons carry
 // data-action / data-id; app.js handles them.
 //
-// A task is a clean checklist row: checkbox and tappable text. A long press opens actions;
-// extra controls are not displayed unless requested. The original stored order is unchanged.
+// Interface rule (0.5.0): a task/event row shows only what is needed to read it — a round checkbox, the title
+// and a small date/time line. A tap opens the edit sheet; a long press (or right click) opens the actions menu
+// (app.js); the edit sheet also has an «Действия» button. Everything else is behind «+».
 
 import { esc } from './util.js';
 import { t, formatDay } from './i18n.js';
@@ -11,12 +12,6 @@ import { ICONS } from './icons.js';
 import { weekKey } from './dates.js';
 
 export const empty = (text = t('empty')) => `<p class="muted empty">${esc(text)}</p>`;
-
-// Stable view-only ordering: checked entries go after unchecked ones. Source arrays
-// stay intact so unchecking puts an entry back at its original position.
-export function unfinishedFirst(items) {
-  return [...items.filter(i => !i.done), ...items.filter(i => !!i.done)];
-}
 
 // Set by app.js before each draw: { today } (the planning day).
 export const uiState = { today: null, fold: {} };
@@ -53,11 +48,11 @@ export function taskRow(task, opts = {}) {
 }
 
 export function taskList(tasks, opts) {
-  return tasks.length ? unfinishedFirst(tasks).map(task => taskRow(task, opts)).join('') : '';
+  return tasks.length ? tasks.map(task => taskRow(task, opts)).join('') : '';
 }
 
-// A tail awaiting a decision: explicit review choices; advanced task actions by long press.
-// Not touching it leaves it where it is.
+// A tail awaiting a decision: «Сегодня», «Завтра», «Выбрать дату», «Готово»; nothing else is offered
+// on the row (the rest is in «···»). Not touching it leaves it where it is.
 export function tailRow(task, { part = 'am', note = '' } = {}) {
   const id = esc(task.id);
   const b = (choice, label, cls = '') => `<button type="button"${cls ? ` class="${cls}"` : ''} data-action="review" data-id="${id}" data-choice="${choice}" data-part="${part}">${esc(label)}</button>`;

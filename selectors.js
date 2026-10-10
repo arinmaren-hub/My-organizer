@@ -12,6 +12,10 @@ export function activeTasks(doc) {
   return doc.tasks.filter(t => alive(t) && !t.skipped);
 }
 
+// Finished items go below the unfinished ones of the same group; each part keeps its own order. It is only a
+// way of showing a group (nothing is stored), so unticking an item puts it back exactly where it was.
+export const doneLast = (items, isDone = x => !!x.done) => [...items.filter(x => !isDone(x)), ...items.filter(isDone)];
+
 export function tasksForDay(doc, day) {
   return activeTasks(doc).filter(t => t.plan.kind === 'day' && t.plan.date === day);
 }

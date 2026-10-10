@@ -1,4 +1,4 @@
-# Мой органайзер — version 0.5.1
+# Мой органайзер — version 0.5.0
 
 A personal organizer that runs entirely on your iPhone or iPad: tasks, events, projects and lists.
 No account, no cloud, no AI. Your data stays on the device; you keep backups yourself.
@@ -42,8 +42,8 @@ Every step also works in Safari on an iPhone (all files are in one folder, no su
 10. **Never publish any other page in this organization**, and do not give anyone else write access.
 
 **Already using the app at the old address** (`https://USERNAME.github.io/organizer/`)? The new address starts with an empty organizer — data does not move by itself:
-1. Open the app at the **old** address (its Home Screen icon) → **«⚙» → Копии и данные → Сохранить копию** → save the file to Files.
-2. Install the app from the **new** address (section 2), open it from the new icon → **«⚙» → Копии и данные → Выбрать файл копии…** → pick that file → check the counts → **Заменить данные**.
+1. Open the app at the **old** address (its Home Screen icon) → **⚙ → Копии и данные → Сохранить копию** → save the file to Files.
+2. Install the app from the **new** address (section 2), open it from the new icon → **⚙ → Копии и данные → Выбрать файл копии…** → pick that file → check the counts → **Заменить данные**.
 3. Check that everything is there. Only then delete the old Home Screen icon (deleting it deletes the data stored with it) and, later, the old repository.
 
 ## 2. Install on the iPhone
@@ -77,22 +77,22 @@ Looking and ticking are the default; changing things appears only when you ask (
 - **Four tabs at the bottom:** Сегодня, Календарь, Задачи, Списки.
 - **«＋» (bottom right)** adds things. On Сегодня and Задачи it opens a multi-line field: **one line = one task**, one «Добавить» saves them all. A task gets today (your planning day) — or, from the Calendar, the selected date — unless the text names a date («завтра», «в пятницу», «до пятницы», «Oct 15» …). A clock time asks «Задача / Событие / Только название». Inside a list it adds items; on Списки it creates a list (blank, from a template, or manage templates).
 - **Сегодня** — the weekday and your planning date at the top left, today's checklist, a folded **Хвосты** section (unfinished tasks from earlier days: «Сегодня», «Завтра», «Выбрать дату», «Готово»; «Оставить как есть» is in the task's long-press menu; nothing moves by itself), a link to **Вечер**, and **Ожидаю от других** at the very bottom. «Сегодня» is **your** day: it changes at the time set in «День заканчивается в», not at midnight.
-- **Rows** show a round checkbox, the title and optional date/time, without separator lines or visible «···». Tap the title to edit; a long press offers Изменить, Перенести, Дублировать, Ожидаю от других, Сделать событием, Удалить. **Swipe a task to the right** to indent it one level (left to undo).
+- **Rows** show a round checkbox, the title and a small date/time — no buttons and no divider lines. Tap the title to edit; a **long press** (or right click) offers Изменить, Перенести, Дублировать, Ожидаю от других, Сделать событием, Удалить. **Swipe a task to the right** to indent it one level (left to undo).
 - **Календарь** — a month grid (Monday first) and a year view. Tap a date for its events and tasks; «＋» adds to that date. An event's details hold an optional collapsed **Подготовка** checklist.
 - **Задачи** — all tasks by day / week / no date; **recurring tasks** are folded at the bottom.
 - **Списки** — **Купить** (made automatically from home items that ran out), **Дом** (what you have at home: Есть / Заканчивается / Закончилось), and your lists with categories and templates (Supermarket, Suitcase Packing, your own). Management is in a list's «···».
-- **The settings gear «⚙» at the top right of Сегодня** — Вечер, Настройки (your day, evening overview), Копии и данные (backups, restore, automatic copies, deleted items), О приложении, «Завершить день», language (Русский / English) and appearance (Светлое / Тёмное / Как в системе). Language is chosen by hand and never follows the phone's language. «Прогресс» (projects) is hidden; it shows up here only if you already have projects.
+- **⚙ (gear) at the top right of Сегодня** — Вечер, Настройки (your day, evening overview), Копии и данные (backups, restore, automatic copies, deleted items), О приложении, «Завершить день», language (Русский / English) and appearance (Светлое / Тёмное / Как в системе). Language is chosen by hand and never follows the phone's language. «Прогресс» (projects) is hidden; it shows up here only if you already have projects.
 
 **Backups — the one habit that matters.** Data lives only on this device. At least once a week:
-**«⚙» → Копии и данные → Сохранить копию → Сохранить в Файлы** (choose iCloud Drive). The Today screen reminds you after 7 days.
+**⚙ → Копии и данные → Сохранить копию → Сохранить в Файлы** (choose iCloud Drive). The Today screen reminds you after 7 days.
 If saving a file does not work, use **Показать текст копии → Скопировать текст** and paste it into Notes.
 
-Deleted something by mistake? **«⚙» → Копии и данные → Удалённые** (kept 30 days; items inside a list or an event's preparation are not listed there).
-Something went wrong after an import or an update? **«⚙» → Копии и данные → Автокопии → Восстановить**. There are daily copies (one per day, the latest 5) and copies taken before every update of the data format, import and restore (the latest 5). They are on the same device, so they do not replace backups.
+Deleted something by mistake? **⚙ → Копии и данные → Удалённые** (kept 30 days; items inside a list or an event's preparation are not listed there).
+Something went wrong after an import or an update? **⚙ → Копии и данные → Автокопии → Восстановить**. There are daily copies (one per day, the latest 5) and copies taken before every update of the data format, import and restore (the latest 5). They are on the same device, so they do not replace backups.
 
 ## 5. Publishing a new version (for whoever changes the code)
 
-0. **Updating an existing installation (0.4.0 → 0.5.0, and older):** first save a backup («⚙» → «Копии и данные» → «Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address) — see `CHANGESET.md` for the exact list, for the *changed-only* package, and for what to delete. **Upload `sw.js` last** (or all files in one commit): installed copies update when they see the new `sw.js`. Open the installed app → «Доступна новая версия» → «Обновить». From 0.4.0 there is **no data migration** (the format is the same); older versions are upgraded automatically with a copy kept in «Копии и данные → Автокопии».
+0. **Updating an existing installation (0.4.0 → 0.5.0, and older):** first save a backup (⚙ → «Копии и данные» → «Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address) — see `CHANGESET.md` for the exact list, for the *changed-only* package, and for what to delete. **Upload `sw.js` last** (or all files in one commit): installed copies update when they see the new `sw.js`. Open the installed app → «Доступна новая версия» → «Обновить». From 0.4.0 there is **no data migration** (the format is the same); older versions are upgraded automatically with a copy kept in «Копии и данные → Автокопии».
 1. Change the files. Follow `DECISIONS.md` sections E, F (data preservation) and G (privacy).
 2. Set the same new version in `version.js` (`APP_VERSION`) and `sw.js` (`VERSION`). New file? Add it to `ASSETS` in `sw.js`.
 3. Run the release gate (`TESTING.md`, section 6): `tests.html` all green, and `e2e-v5-test.py`, `e2e-test.py`, `privacy-test.py`, `upgrade-test.py` (from every earlier version) all passing. **If a migration or isolation test fails, do not publish.**
@@ -108,10 +108,10 @@ Testing on a computer before uploading: in the unzipped folder run `python3 -m h
 |---|---|
 | A message that the app did not start | Make sure you opened the https address, not a file. Refresh. If it stays, send the message text. |
 | Red banner «Не удалось сохранить» | Tap «Сохранить копию» immediately, then «Повторить». Usually means the phone's storage is full. |
-| «Основные данные не читаются» | The app loaded the newest automatic copy and kept the damaged text («⚙» → «Копии и данные» → «Повреждённые данные»). Import your latest backup if anything is missing. |
-| «Только чтение» | The app refuses to write so nothing gets lost. Read the reason in the banner; usually: update the app, or download the raw data from «⚙» → «Копии и данные». |
-| «…обновление данных остановлено» | The new version could not safely upgrade your saved data, so it changed nothing. Tap «⚙» → «Копии и данные» → «Скачать исходные данные» and keep the file; then report the problem. If the reason is lack of space, after downloading you may tap «Продолжить обновление без копии». |
-| «Данные переведены в новый формат» | Normal after an update. A copy of the previous data is in «⚙» → «Копии и данные» → «Автокопии» («перед обновлением формата данных»). |
+| «Основные данные не читаются» | The app loaded the newest automatic copy and kept the damaged text (⚙ → «Копии и данные» → «Повреждённые данные»). Import your latest backup if anything is missing. |
+| «Только чтение» | The app refuses to write so nothing gets lost. Read the reason in the banner; usually: update the app, or download the raw data from ⚙ → «Копии и данные». |
+| «…обновление данных остановлено» | The new version could not safely upgrade your saved data, so it changed nothing. Tap ⚙ → «Копии и данные» → «Скачать исходные данные» and keep the file; then report the problem. If the reason is lack of space, after downloading you may tap «Продолжить обновление без копии». |
+| «Данные переведены в новый формат» | Normal after an update. A copy of the previous data is in ⚙ → «Копии и данные» → «Автокопии» («перед обновлением формата данных»). |
 | «Эта копия сделана в другом органайзере» | The backup comes from another device or another person. Replace your data with it only if you are sure; the app asks twice and keeps your current data as a copy. |
 | The update banner never appears | The version in `sw.js` was not changed. Bump it (see section 5). |
 | Data looks empty after installing | You may have used Safari before installing. Safari's data is separate; export it there and import it in the app. |

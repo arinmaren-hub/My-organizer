@@ -142,11 +142,11 @@ function editSheet(doc, ctx, s) {
   if (s.kind === 'task') {
     const task = find(doc.tasks, s.id);
     if (!task) return '';
-    body = editTaskForm(task) + (task.seriesId ? '' : `<div class="line"><button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button></div>`);
+    body = editTaskForm(task) + `<div class="line"><button type="button" class="quiet" data-action="menu.task" ${idAttr(task.id)}>${esc(t('aria.more'))}</button>${task.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button>`}</div>`;
   } else if (s.kind === 'event') {
     const e = find(doc.events, s.id);
     if (!e) return '';
-    body = editEventForm(e) + `<div class="line"><button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button></div>`;
+    body = editEventForm(e) + `<div class="line"><button type="button" class="quiet" data-action="menu.event" ${idAttr(e.id)}>${esc(t('aria.more'))}</button><button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button></div>`;
   } else if (s.kind === 'waiting') {
     const w = find(doc.waiting, s.id);
     if (!w) return '';
