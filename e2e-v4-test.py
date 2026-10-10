@@ -1,3 +1,5 @@
+"""OBSOLETE since 0.5.0: this suite drives the 0.4.0 screens (six tabs, inline forms). Run it only against a 0.4.0 copy of the app;
+for 0.5.0 use e2e-v5-test.py (and e2e-test.py, privacy-test.py, upgrade-test.py)."""
 import os
 """Browser tests for the features added in 0.4.0 (headless Chromium, iPhone-sized screen).
 Usage: python3 e2e-v4-test.py <app_folder> <output_folder>

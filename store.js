@@ -408,6 +408,7 @@ export function createStore({ storage, clock = () => new Date(), keys = KEYS, no
       n += before - doc[k].length;
     }
     for (const p of doc.projects) { const b = p.milestones.length; p.milestones = p.milestones.filter(m => !old(m)); n += b - p.milestones.length; }
+    for (const e of doc.events) if (Array.isArray(e.prep)) { const b = e.prep.length; e.prep = e.prep.filter(i => !old(i)); n += b - e.prep.length; }
     for (const l of [...doc.lists, ...doc.templates]) { const b = l.items.length; l.items = l.items.filter(i => !old(i)); n += b - l.items.length; }
     return n;
   }

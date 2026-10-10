@@ -1,107 +1,113 @@
-// "Списки" screen: lists with categories and checkable items, and reusable templates.
-// A list and a template have the same shape; templates have no checkmarks.
+// «Списки» (0.5.0): an index first — «Купить» (generated), «Дом», then the person's lists.
+// A tap opens one list on its own screen; the header shows «‹ Списки» and a «···» for management.
+// Templates are not on this screen: they are reached from «＋ → Новый список».
+// Routes (ui.list): null = index, 'buy', 'home', 'templates', 'l:<listId>', 't:<templateId>'.
 
 import { esc } from './util.js';
 import { t, getLang } from './i18n.js';
 import { activeLists } from './selectors.js';
-import { empty, uiState } from './components.js';
-import { groupItems, categoriesOf, listTemplates, missingBuiltins, isBuiltinId, baseOf } from './templates.js';
+import { empty, foldBlock, moreButton } from './components.js';
+import { groupItems, listTemplates, missingBuiltins, isBuiltinId, baseOf } from './templates.js';
+import { homeItems, buyItems, stockOf, STOCK_ORDER } from './home.js';
+import { ICONS } from './icons.js';
 
-const isEditingItem = (id) => !!uiState.editing && uiState.editing.kind === 'item' && uiState.editing.id === id;
+// The container behind a route (a list or a template); a built-in template that was edited follows its copy.
+export function getContainer(doc, coll, id) {
+  if (coll === 'lists') return doc.lists.find(l => l.id === id && !l.deletedAt && l.kind !== 'home') || null;
+  if (isBuiltinId(id)) {
+    const moved = doc.templates.find(x => x.base === baseOf(id) && !x.deletedAt);
+    if (moved) return moved;
+  }
+  return listTemplates(doc, getLang()).find(x => x.id === id) || null;
+}
 
-function categoryField(c, value = '') {
-  const dl = `cats-${esc(c.id)}`;
-  return `<input name="category" list="${dl}" value="${esc(value || '')}" placeholder="${esc(t('lists.categoryPh'))}" aria-label="${esc(t('lists.categoryPh'))}">
-    <datalist id="${dl}">${categoriesOf(c).map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
+// What the header needs: { title, sub, back, more, fab }; null when the route no longer exists.
+export function listsRoute(doc, route) {
+  if (!route) return { route: null, title: t('tab.lists'), back: false, more: null, fab: 'newlist' };
+  if (route === 'buy') return { route, title: t('lists.buy'), back: true, more: null, fab: null };
+  if (route === 'home') return { route, title: t('lists.home'), back: true, more: null, fab: 'addhome' };
+  if (route === 'templates') return { route, title: t('lists.templates'), back: true, more: null, fab: 'newtpl' };
+  const coll = route.startsWith('t:') ? 'templates' : route.startsWith('l:') ? 'lists' : null;
+  const c = coll && getContainer(doc, coll, route.slice(2));
+  if (!c) return null;
+  const items = c.items.filter(i => !i.deletedAt);
+  const sub = coll === 'lists' && items.length ? t('lists.progress', { done: items.filter(i => i.done).length, total: items.length }) : '';
+  return { route: (coll === 'lists' ? 'l:' : 't:') + c.id, coll, c, title: c.name, sub, back: true, more: 'menu.list', fab: 'additems' };
+}
+
+const indexRow = (route, title, count, hint = '') =>
+  `<button type="button" class="indexrow" data-action="list.open" data-route="${esc(route)}">
+    <span class="grow"><span class="title">${esc(title)}</span>${hint ? `<span class="meta">${esc(hint)}</span>` : ''}</span>
+    ${count ? `<span class="count">${esc(count)}</span>` : ''}<span class="chev">${ICONS.chevron}</span></button>`;
+
+function index(doc) {
+  const lists = activeLists(doc);
+  const buy = buyItems(doc).length, home = homeItems(doc).length;
+  return `<section class="list">
+      ${indexRow('buy', t('lists.buy'), buy ? String(buy) : '', t('lists.buyHint'))}
+      ${indexRow('home', t('lists.home'), home ? String(home) : '', t('lists.homeHint'))}
+      ${lists.map(l => {
+        const items = l.items.filter(i => !i.deletedAt), open = items.filter(i => !i.done).length;
+        return indexRow('l:' + l.id, l.name, items.length ? (open ? String(open) : '✓') : '');
+      }).join('')}
+    </section>${lists.length ? '' : empty(t('lists.empty'))}`;
+}
+
+function buyScreen(doc) {
+  const items = buyItems(doc);
+  return `<section class="list">${items.map(i => `<div class="row irow">
+      <input type="checkbox" data-action="buy.toggle" data-id="${esc(i.id)}" aria-label="${esc(t('lists.bought'))}">
+      <div class="grow ttext"><div class="title">${esc(i.title)}</div></div></div>`).join('')}</section>${items.length ? '' : empty(t('lists.buyEmpty'))}`;
+}
+
+function homeScreen(doc) {
+  const items = homeItems(doc);
+  if (!items.length) return empty(t('lists.homeEmpty'));
+  return STOCK_ORDER.slice().reverse().map(k => {
+    const list = items.filter(i => stockOf(i) === k);
+    if (!list.length) return '';
+    return foldBlock('home.' + k, t('stock.' + k), list.map(i => `<div class="row hrow"><div class="grow ttext" data-action="stock.open" data-id="${esc(i.id)}" role="button" tabindex="0"><div class="title">${esc(i.title)}</div></div></div>`).join(''),
+      { count: String(list.length), defaultOpen: true });
+  }).join('');
 }
 
 function itemRow(c, coll, i) {
   const cid = esc(c.id), iid = esc(i.id);
-  if (isEditingItem(i.id)) {
-    return `<div class="row"><form class="editform grow" data-form="item.edit" data-coll="${coll}" data-list="${cid}" data-item="${iid}" autocomplete="off">
-      <div class="line"><input name="title" value="${esc(i.title)}" required class="grow" aria-label="${esc(t('lists.itemPh'))}">${categoryField(c, i.category)}</div>
-      <div class="line"><button type="submit" class="primary">${esc(t('btn.save'))}</button><button type="button" data-action="edit.cancel">${esc(t('btn.cancel'))}</button></div></form></div>`;
-  }
-  const tools = `<button type="button" class="icon" data-action="edit.open" data-kind="item" data-id="${iid}" aria-label="${esc(t('aria.edit'))}">✎</button>
-      <button type="button" class="icon" data-action="item.delete" data-coll="${coll}" data-list="${cid}" data-id="${iid}" aria-label="${esc(t('btn.delete'))}">×</button>`;
-  if (coll === 'lists') {
-    return `<div class="row${i.done ? ' is-done' : ''}">
-      <label class="grow itemlabel"><input type="checkbox" data-action="item.toggle" data-list="${cid}" data-id="${iid}" ${i.done ? 'checked' : ''}> <span class="title">${esc(i.title)}</span></label>${tools}</div>`;
-  }
-  return `<div class="row"><div class="grow title">${esc(i.title)}</div>${tools}</div>`;
+  const check = coll === 'lists' ? `<input type="checkbox" data-action="item.toggle" data-list="${cid}" data-id="${iid}" ${i.done ? 'checked' : ''} aria-label="${esc(t('aria.done'))}">` : '';
+  return `<div class="row irow${i.done ? ' is-done' : ''}">${check}
+    <div class="grow ttext" data-action="edit.open" data-kind="item" data-coll="${coll}" data-list="${cid}" data-id="${iid}" role="button" tabindex="0"><div class="title">${esc(i.title)}</div></div></div>`;
 }
 
-function categoryHead(c, coll, name) {
-  const cid = esc(c.id), n = esc(name);
-  return `<div class="line cathead"><h3 class="grow">${esc(name)}</h3>
-    <button type="button" class="quiet" data-action="cat.rename" data-coll="${coll}" data-list="${cid}" data-name="${n}">${esc(t('lists.renameCategory'))}</button>
-    <button type="button" class="quiet" data-action="cat.remove" data-coll="${coll}" data-list="${cid}" data-name="${n}">${esc(t('lists.removeCategory'))}</button></div>`;
-}
-
-// The body shared by a list card and a template editor.
-function containerBody(c, coll) {
-  const cid = esc(c.id);
+function listScreen(doc, r) {
+  const { c, coll } = r;
   const groups = groupItems(c);
-  let h = groups.map(g => `${g.category !== null ? categoryHead(c, coll, g.category) : ''}${g.items.map(i => itemRow(c, coll, i)).join('')}`).join('');
-  h += `<form class="line" data-form="item.add" data-coll="${coll}" data-list="${cid}" autocomplete="off">
-      <input name="title" required placeholder="${esc(t('lists.addItem'))}" class="grow">${categoryField(c)}<button type="submit" aria-label="${esc(t('lists.addItem'))}">+</button></form>
-    <form class="line" data-form="cat.add" data-coll="${coll}" data-list="${cid}" autocomplete="off">
-      <input name="name" required placeholder="${esc(t('lists.categoryNamePh'))}" class="grow"><button type="submit">${esc(t('lists.addCategory'))}</button></form>`;
+  const any = c.items.some(i => !i.deletedAt);
+  let h = groups.map(g => {
+    const rows = g.items.map(i => itemRow(c, coll, i)).join('');
+    if (g.category === null) return `<section class="list">${rows}</section>`;
+    return foldBlock(`cat:${c.id}:${g.category}`, g.category, rows || empty(t('lists.categoryEmpty')), { count: String(g.items.length), defaultOpen: true });
+  }).join('');
+  if (!any && !groups.length) h = empty(t('lists.itemsEmpty'));
   return h;
 }
 
-function listCard(l) {
-  const lid = esc(l.id);
-  return `
-    <section class="card">
-      <div class="line"><h2 class="grow">${esc(l.name)}</h2>
-        <button type="button" class="quiet" data-action="list.saveTemplate" data-id="${lid}">${esc(t('lists.saveAsTemplate'))}</button>
-        <button type="button" data-action="list.delete" data-id="${lid}">${esc(t('btn.delete'))}</button></div>
-      ${containerBody(l, 'lists')}
-    </section>`;
-}
-
-function templateRow(tpl) {
-  const id = esc(tpl.id);
-  const n = tpl.items.filter(i => !i.deletedAt).length;
-  return `<div class="row"><div class="grow"><div class="title">${esc(tpl.name)}${tpl.builtin ? ` <span class="muted small">(${esc(t('lists.builtin'))})</span>` : ''}</div>
-      <div class="muted small">${esc(t('lists.itemsCount', { n }))}</div>
-      <div class="moves"><button type="button" class="primary" data-action="tpl.use" data-id="${id}">${esc(t('lists.useTemplate', { name: tpl.name }))}</button>
-        <button type="button" data-action="tpl.edit" data-id="${id}">${esc(t('lists.editTemplate'))}</button></div></div>
-      <button type="button" class="icon" data-action="tpl.delete" data-id="${id}" aria-label="${esc(t('btn.delete'))}">×</button></div>`;
-}
-
-function templatesSection(doc, ctx) {
+function templatesScreen(doc) {
   const all = listTemplates(doc, getLang());
-  // an edited built-in has become an ordinary record: follow it
-  let editId = ctx.ui.tplEdit;
-  if (isBuiltinId(editId)) { const moved = doc.templates.find(x => x.base === baseOf(editId) && !x.deletedAt); if (moved) editId = moved.id; }
-  const editing = editId && all.find(x => x.id === editId);
   const missing = missingBuiltins(doc);
-  return `
-    <section class="card">
-      <h2>${esc(t('lists.templates'))}</h2>
-      <p class="muted small">${esc(t('lists.templatesHint'))}</p>
-      ${all.length ? all.map(templateRow).join('') : empty(t('lists.noTemplates'))}
-      <form class="line" data-form="tpl.add" autocomplete="off">
-        <input name="name" required placeholder="${esc(t('lists.templateNamePh'))}" class="grow"><button type="submit">${esc(t('lists.newTemplate'))}</button></form>
-      ${missing.length ? `<div class="line"><button type="button" class="quiet" data-action="tpl.restoreBuiltin" data-bases="${esc(missing.join(','))}">${esc(t('lists.restoreBuiltin'))}</button></div><p class="muted small">${esc(t('lists.restoreHint'))}</p>` : ''}
-    </section>
-    ${editing ? `<section class="card" id="template-editor"><div class="line"><h2 class="grow">${esc(editing.name)}</h2>
-        <button type="button" data-action="tpl.close">${esc(t('lists.close'))}</button></div>
-      <form class="line" data-form="tpl.rename" data-list="${esc(editing.id)}" autocomplete="off"><label class="field grow"><span>${esc(t('lists.rename'))}</span><input name="name" value="${esc(editing.name)}" required class="grow"></label><button type="submit">${esc(t('btn.save'))}</button></form>
-      ${containerBody(editing, 'templates')}</section>` : ''}`;
+  return `<section class="list">${all.map(tpl => {
+      const n = tpl.items.filter(i => !i.deletedAt).length;
+      return `<div class="row"><div class="grow ttext" data-action="tpl.edit" data-id="${esc(tpl.id)}" role="button" tabindex="0">
+        <div class="title">${esc(tpl.name)}</div><div class="meta">${esc([tpl.builtin ? t('lists.builtin') : '', t('lists.itemsCount', { n })].filter(Boolean).join(' · '))}</div></div>
+        ${moreButton('menu.tpl', tpl.id)}</div>`;
+    }).join('')}</section>${all.length ? '' : empty(t('lists.noTemplates'))}
+    ${missing.length ? `<div class="line"><button type="button" class="quiet" data-action="tpl.restoreBuiltin" data-bases="${esc(missing.join(','))}">${esc(t('lists.restoreBuiltin'))}</button></div>` : ''}`;
 }
 
 export function renderLists(doc, ctx) {
-  const lists = activeLists(doc);
-  return `
-    <section class="card">
-      <h2>${esc(t('lists.new'))}</h2>
-      <form class="line" data-form="list.add" autocomplete="off">
-        <input name="name" required placeholder="${esc(t('lists.namePh'))}" class="grow"><button type="submit" class="primary">${esc(t('btn.create'))}</button>
-      </form>
-    </section>
-    ${lists.length ? lists.map(listCard).join('') : `<section class="card">${empty(t('lists.empty'))}</section>`}
-    ${templatesSection(doc, ctx)}`;
+  const r = listsRoute(doc, ctx.ui.list) || listsRoute(doc, null);
+  if (!r.route) return index(doc);
+  if (r.route === 'buy') return buyScreen(doc);
+  if (r.route === 'home') return homeScreen(doc);
+  if (r.route === 'templates') return templatesScreen(doc);
+  return listScreen(doc, r);
 }

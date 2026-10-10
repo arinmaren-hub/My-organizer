@@ -21,6 +21,7 @@ import { isPlainObject } from './util.js';
 // 4 = 0.4.0 (adds series, waiting, templates; task review/series fields; list categories).
 // Every step only ADDS fields and collections with defaults, so upgrading never removes data.
 export const SCHEMA_VERSION = 4;
+export const STOCK_STATES = ['have', 'low', 'out'];
 export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists', 'series', 'waiting', 'templates'];
 export const PLAN_KINDS = ['day', 'week', 'none'];
 export const REVIEW_CHOICES = ['moved', 'kept', 'done'];
@@ -177,6 +178,12 @@ function checkTask(r, now) {
   if (!isBool(t.skipped)) return fail('reason.badSkipped');
   t.doneDay = t.done ? (t.doneDay ?? null) : null;
   if (t.doneDay !== null && !isDateKey(t.doneDay)) return fail('reason.badDoneDay');
+  // `indent` (0.5.0): the task is shown shifted one step to the right. Optional; only `true` is kept.
+  if (t.indent !== true) delete t.indent;
+  // `convertedFrom` / `convertedTo` (0.5.0): ids of the event this task was made from / turned into
+  // (task ↔ event conversion). Optional; anything that is not an id is dropped. Used only to keep
+  // a restored original from duplicating its converted copy.
+  for (const k of ['convertedFrom', 'convertedTo']) if (t[k] !== undefined && !isId(t[k])) delete t[k];
   const s = stamps(t, now);
   return s ? fail(s) : { value: t };
 }
@@ -203,8 +210,17 @@ function checkEvent(r, now) {
   if (!checkRepeat(e.repeat)) return fail('reason.badRepeat');
   e.alerts = e.alerts ?? [];
   if (!Array.isArray(e.alerts) || !e.alerts.every(a => isPlainObject(a) && isNonNegInt(a.minutesBefore))) return fail('reason.badAlerts');
+  // `prep` (0.5.0): the event's own preparation checklist. Optional; absent for older events.
+  let nested;
+  if (e.prep !== undefined) {
+    if (!Array.isArray(e.prep)) return fail('reason.itemsNotList');
+    const res = checkNested(e.prep, 'prep', now);
+    e.prep = res.kept;
+    nested = res.bad;
+  }
+  for (const k of ['convertedFrom', 'convertedTo']) if (e[k] !== undefined && !isId(e[k])) delete e[k]; // see checkTask
   const s = stamps(e, now);
-  return s ? fail(s) : { value: e };
+  return s ? fail(s) : { value: e, nested };
 }
 
 // Nested items (milestones, list items). Bad ones are quarantined on their own,
@@ -216,6 +232,8 @@ function checkItem(r, now) {
   if (!isStr(i.title)) return fail('reason.noItemTitle');
   if (!isBool(i.done)) return fail('reason.badDone');
   if (i.category !== undefined && i.category !== null && !isStr(i.category)) return fail('reason.badCategory');
+  // `stock` (0.5.0, items of the «Дом» list): 'have' | 'low' | 'out'. Anything else is dropped (=have).
+  if (i.stock !== undefined && !STOCK_STATES.includes(i.stock)) delete i.stock;
   const s = stamps(i, now);
   return s ? fail(s) : { value: i };
 }
@@ -255,6 +273,8 @@ function checkList(r, now) {
   if (!Array.isArray(l.items)) return fail('reason.itemsNotList');
   // `categories` (names of categories that may hold no items yet) is optional: lists made before 0.4.0 have none.
   if (l.categories !== undefined && (!Array.isArray(l.categories) || !l.categories.every(isStr))) return fail('reason.badCategories');
+  // `kind: 'home'` (0.5.0) marks the permanent household inventory; any other value is dropped.
+  if (l.kind !== undefined && l.kind !== 'home') delete l.kind;
   const s = stamps(l, now);
   if (s) return fail(s);
   const { kept, bad } = checkNested(l.items, 'items', now);
@@ -479,11 +499,13 @@ export function findLostRecords(input, res) {
     const originals = byId(list);
     if (loaded.some(r => !hasOriginal(originals, r))) return key;
   }
-  const NESTED = [['projects', 'milestones', v1 ? 'steps' : 'milestones'], ['lists', 'items', 'items'], ['templates', 'items', 'items']];
-  for (const [key, field, inputField] of NESTED) {
+  // [collection, field, field name in the input, optional]; an event's `prep` (0.5.0) is optional.
+  const NESTED = [['projects', 'milestones', v1 ? 'steps' : 'milestones'], ['lists', 'items', 'items'], ['templates', 'items', 'items'], ['events', 'prep', 'prep', true]];
+  for (const [key, field, inputField, optional] of NESTED) {
     if (!Array.isArray(input[key])) continue;
     const originals = byId(input[key]);
     for (const r of res.doc[key]) {
+      if (optional && r[field] === undefined) continue;
       if (!Array.isArray(r[field])) return `${key}.${field}`;
       const nestedQ = q.filter(x => x.collection === `${key}.${field}` && x.parentId === r.id).length;
       // The original this record was loaded from: same id and title, and its items all accounted for.

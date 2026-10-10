@@ -106,7 +106,8 @@ export function eventsForDay(doc, day) {
 }
 
 export const activeProjects = doc => doc.projects.filter(alive);
-export const activeLists = doc => doc.lists.filter(alive);
+// Ordinary lists (the «Дом» inventory list is not one of them; see home.js).
+export const activeLists = doc => doc.lists.filter(l => alive(l) && l.kind !== 'home');
 
 // Every soft-deleted record, newest deletion first, for the restore list.
 export function deletedRecords(doc) {
@@ -114,7 +115,7 @@ export function deletedRecords(doc) {
   for (const t of doc.tasks) if (t.deletedAt) out.push({ collection: 'tasks', id: t.id, label: t.title, deletedAt: t.deletedAt });
   for (const e of doc.events) if (e.deletedAt) out.push({ collection: 'events', id: e.id, label: e.title, deletedAt: e.deletedAt });
   for (const p of doc.projects) if (p.deletedAt) out.push({ collection: 'projects', id: p.id, label: p.name, deletedAt: p.deletedAt });
-  for (const l of doc.lists) if (l.deletedAt) out.push({ collection: 'lists', id: l.id, label: l.name, deletedAt: l.deletedAt });
+  for (const l of doc.lists) if (l.deletedAt && l.kind !== 'home') out.push({ collection: 'lists', id: l.id, label: l.name, deletedAt: l.deletedAt });
   for (const x of doc.series) if (x.deletedAt) out.push({ collection: 'series', id: x.id, label: x.title, deletedAt: x.deletedAt });
   for (const w of doc.waiting) if (w.deletedAt) out.push({ collection: 'waiting', id: w.id, label: w.title, deletedAt: w.deletedAt });
   for (const x of doc.templates) if (x.deletedAt) out.push({ collection: 'templates', id: x.id, label: x.name, deletedAt: x.deletedAt });

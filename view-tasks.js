@@ -1,19 +1,19 @@
-// "Задачи" screen: quick add, recurring tasks, and all tasks grouped by plan kind.
+// «Задачи»: all tasks in three groups (by day, by week, no date); each row is a checkbox, the
+// title and «···». Recurring tasks are at the very bottom, folded; adding one is folded too.
 
 import { esc } from './util.js';
 import { t, formatDay } from './i18n.js';
 import { tasksByKind, activeSeries } from './selectors.js';
-import { quickAdd, taskList, empty, uiState } from './components.js';
-import { seriesHistory } from './recur.js';
+import { taskRow, empty, foldBlock, moreButton } from './components.js';
 import { SERIES_FREQS } from './schema.js';
-
-const GROUPS = [['day', 'tasks.byDay'], ['week', 'tasks.byWeek'], ['none', 'tasks.none']];
+import { seriesHistory } from './recur.js';
+import { ICONS } from './icons.js';
 
 export function ruleText(s) {
   return t(`recur.rule.${s.freq}.${s.interval === 1 ? '1' : 'n'}`, { n: s.interval });
 }
 
-function ruleFields(s, today) {
+export function ruleFields(s, today) {
   const sel = (name, list, cur, label) => `<select name="${name}" aria-label="${esc(t(label))}">${list.map(([v, key]) => `<option value="${v}"${cur === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}</select>`;
   return `
       <div class="line"><span>${esc(t('recur.every'))}</span>
@@ -26,47 +26,48 @@ function ruleFields(s, today) {
         <label class="field"><span>${esc(t('edit.time'))}</span><input type="time" name="time" value="${esc(s && s.time ? s.time : '')}"></label></div>`;
 }
 
-function seriesRow(doc, s, today) {
-  const id = esc(s.id);
-  const editing = uiState.editing && uiState.editing.kind === 'series' && uiState.editing.id === s.id;
-  if (editing) {
-    return `<div class="row"><div class="grow"><form class="editform" data-form="series.edit" data-id="${id}" autocomplete="off">
+export function seriesEditForm(doc, s, today) {
+  const hist = seriesHistory(doc, s.id).slice(0, 15);
+  return `<form class="editform" data-form="series.edit" data-id="${esc(s.id)}" autocomplete="off">
       <label class="field"><span>${esc(t('recur.name'))}</span><input name="title" value="${esc(s.title)}" required class="grow"></label>
       ${ruleFields(s, today)}
       <label class="line"><input type="checkbox" name="applyOpen" checked> <span>${esc(t('recur.applyOpen'))}</span></label>
-      <div class="line"><button type="submit" class="primary">${esc(t('btn.save'))}</button><button type="button" data-action="edit.cancel">${esc(t('btn.cancel'))}</button></div>
-    </form></div></div>`;
-  }
+      <div class="line"><button type="submit" class="primary">${esc(t('btn.save'))}</button><button type="button" data-action="sheet.close">${esc(t('btn.cancel'))}</button></div>
+    </form>
+    <h3 class="sub">${esc(t('recur.history'))}</h3>
+    ${hist.length ? hist.map(h => `<div class="small">${esc(formatDay(h.date))} ${esc(t(`recur.h.${h.status}`))}${h.doneDay ? ` · ${esc(t('wait.since', { day: { $day: h.doneDay } }))}` : ''}</div>`).join('') : empty(t('recur.historyEmpty'))}`;
+}
+
+function seriesRow(doc, s) {
   const mine = doc.tasks.filter(x => x.seriesId === s.id && !x.deletedAt && !x.done && !x.skipped);
   const now = mine.map(x => x.occurrenceDate).sort()[0];
   const meta = [t('recur.ruleLine', { rule: ruleText(s), mode: t(`recur.mode.${s.mode}`) })];
   if (s.paused) meta.push(t('recur.paused'));
   else if (now) meta.push(t('recur.next', { day: { $day: now } }));
-  const hist = seriesHistory(doc, s.id).slice(0, 15);
-  return `<div class="row"><div class="grow"><div class="title">↻ ${esc(s.title)}</div>
-      <div class="muted small">${esc(meta.join(' · '))}</div>
-      <div class="moves"><button type="button" data-action="series.pause" data-id="${id}" data-paused="${s.paused ? '' : '1'}">${esc(t(s.paused ? 'recur.resume' : 'recur.pause'))}</button></div>
-      <details><summary>${esc(t('recur.history'))}</summary>${hist.length ? hist.map(h =>
-        `<div class="small">${esc(formatDay(h.date))} ${esc(t(`recur.h.${h.status}`))}${h.doneDay ? ` · ${esc(t('wait.since', { day: { $day: h.doneDay } }))}` : ''}</div>`).join('') : empty(t('recur.historyEmpty'))}</details>
-    </div>
-    <button type="button" class="icon" data-action="edit.open" data-kind="series" data-id="${id}" aria-label="${esc(t('aria.edit'))}">✎</button>
-    <button type="button" class="icon" data-action="series.delete" data-id="${id}" aria-label="${esc(t('btn.delete'))}">×</button></div>`;
+  return `<div class="row srow" data-id="${esc(s.id)}">
+      <div class="grow ttext" data-action="edit.open" data-kind="series" data-id="${esc(s.id)}" role="button" tabindex="0"><div class="title">↻ ${esc(s.title)}</div><div class="meta">${esc(meta.join(' · '))}</div></div>
+      ${moreButton('menu.series', s.id)}</div>`;
 }
 
-function renderRecurring(doc, today) {
+function recurring(doc, today) {
   const list = activeSeries(doc);
-  return `<section class="card"><h2>${esc(t('recur.title'))}</h2>
-    <p class="muted small">${esc(t('recur.hint'))}</p>
-    ${list.length ? list.map(s => seriesRow(doc, s, today)).join('') : empty(t('recur.empty'))}
-    <details><summary>${esc(t('recur.add'))}</summary>
-      <form data-form="series.add" autocomplete="off">
-        <div class="line"><input name="title" required placeholder="${esc(t('recur.name'))}" class="grow"></div>
-        ${ruleFields(null, today)}
-        <div class="line"><button type="submit" class="primary">${esc(t('recur.add'))}</button></div>
-      </form></details></section>`;
+  const addRow = `<button type="button" class="linkrow" data-action="series.new"><span class="grow">${esc(t('recur.add'))}</span>${ICONS.plus}</button>`;
+  return foldBlock('recurring', t('recur.title'), (list.length ? list.map(s => seriesRow(doc, s)).join('') : empty(t('recur.empty'))) + addRow,
+    { count: list.length ? String(list.length) : null, cls: 'recurring' });
+}
+
+// Day groups get a small date heading; the rows then need no date of their own.
+function dayGroups(tasks) {
+  const byDay = new Map();
+  for (const x of tasks) byDay.set(x.plan.date, [...(byDay.get(x.plan.date) || []), x]);
+  return [...byDay.entries()].map(([day, list]) => `<h3 class="sub">${esc(formatDay(day))}</h3>${list.map(x => taskRow(x)).join('')}`).join('');
 }
 
 export function renderTasks(doc, ctx) {
-  return quickAdd(ctx.quick, ctx.today) + renderRecurring(doc, ctx.today) + GROUPS.map(([kind, key]) => `
-    <section class="card"><h2>${esc(t(key))}</h2>${taskList(tasksByKind(doc, kind), { withMove: true })}</section>`).join('');
+  const day = tasksByKind(doc, 'day'), week = tasksByKind(doc, 'week'), none = tasksByKind(doc, 'none');
+  const group = (key, count, body) => `<section class="group"><h2>${esc(t(key))}${count ? ` <span class="count">${count}</span>` : ''}</h2>${body || empty(t('tasks.groupEmpty'))}</section>`;
+  return group('tasks.byDay', day.length, dayGroups(day)) +
+    group('tasks.byWeek', week.length, week.map(x => taskRow(x, { plan: true })).join('')) +
+    group('tasks.none', none.length, none.map(x => taskRow(x)).join('')) +
+    recurring(doc, ctx.today);
 }

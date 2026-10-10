@@ -14,6 +14,7 @@
 import { KEYS } from './storage.js';
 import { parseDateKey, isDateKey, isDateTime, timeOf } from './dates.js';
 import { RU4, EN4, NAMES } from './i18n-v4.js';
+import { RU5, EN5 } from './i18n-v5.js';
 
 export const LANGS = ['ru', 'en'];
 // Each language is named in its own language, as is usual.
@@ -66,6 +67,12 @@ export const monthShort = m => NAMES.monthsShort[lang][m - 1];
 export const weekdayShort = i => NAMES.weekdaysShort[lang][i];
 export const weekdayLong = i => NAMES.weekdaysLong[lang][i];
 
+// '9 октября' / 'October 9' (the header date)
+export function dayLong(key) {
+  if (!isDateKey(key)) return '';
+  const d = parseDateKey(key);
+  return lang === 'ru' ? `${d.getDate()} ${NAMES.monthsGen.ru[d.getMonth()]}` : `${NAMES.monthsGen.en[d.getMonth()]} ${d.getDate()}`;
+}
 // 'пт, 9 окт' / 'Fri, 9 Oct'
 export function formatDay(key) {
   if (!isDateKey(key)) return typeof key === 'string' ? key : '';
@@ -681,6 +688,8 @@ const EN = {
 // Texts of 0.4.0 live in i18n-v4.js (plain data) and are merged here.
 Object.assign(RU, RU4);
 Object.assign(EN, EN4);
+Object.assign(RU, RU5);
+Object.assign(EN, EN5);
 
 export const DICTS = { ru: RU, en: EN };
 

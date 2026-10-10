@@ -94,42 +94,58 @@ with sync_playwright() as p:
             else: d.accept()
         q.on('dialog', on_dialog)
         q.goto(BASE)
-        q.wait_for_function('window.__organizerReady === true')
+        q.wait_for_function('() => window.__organizerReady === true')
         if lang_en:
             q.click('button[data-action="language.set"][data-mode="en"]')
         q.click('[data-action="onboarding.skip"]')
-        q.wait_for_selector('nav button')
+        q.wait_for_selector('nav#nav button')
         return c, q
 
+    def wait_sheet(q):
+        q.wait_for_selector('#sheet-root .sheet'); q.wait_for_timeout(260)
+
     def tab(q, i):
-        q.click(f'nav button >> nth={i}')
+        # 0 Today, 1 Calendar, 2 Tasks, 3 Progress (via the menu), 4 Lists, 5 Data (via the menu)
+        if i in (0, 1, 2, 4):
+            q.click(f'nav#nav button >> nth={ {0: 0, 1: 1, 2: 2, 4: 3}[i] }'); q.wait_for_timeout(40)
+        else:
+            q.click('nav#nav button >> nth=0'); q.wait_for_timeout(60)
+            q.click('#more-btn'); wait_sheet(q)
+            q.click(f'#sheet-root [data-action="go"][data-tab="{"projects" if i == 3 else "data"}"]'); q.wait_for_timeout(40)
+
+    def add_text(q, text):
+        q.click('#fab'); wait_sheet(q)
+        q.fill('#sheet-root textarea', text)
+        q.click('#sheet-root form button[type=submit]'); q.wait_for_timeout(80)
 
     def fill_data(q, marks):
         task, event, project, lst, item, wait, rep = marks
-        q.fill('form[data-form="task.quickAdd"] textarea', task)
-        q.click('form[data-form="task.quickAdd"] button[type=submit]')
+        tab(q, 0)
+        add_text(q, task)
         tab(q, 1)
-        q.fill('form[data-form="cal.add"] input[name=title]', event)
-        q.fill('form[data-form="cal.add"] input[name=time]', '10:00')
-        q.click('form[data-form="cal.add"] button[value=event]')
-        tab(q, 3)
-        q.fill('form[data-form="project.add"] input[name=name]', project)
-        q.fill('form[data-form="project.add"] input[name=total]', '10')
-        q.fill('form[data-form="project.add"] input[name=unit]', 'x')
-        q.click('form[data-form="project.add"] button[type=submit]')
+        add_text(q, event + ' в 10:00')
+        q.click('[data-action="quick.asEvent"]'); q.wait_for_timeout(80)
+        # projects have no «create» button in 0.5.0 (the screen is hidden); the record is put in directly
+        q.evaluate("""n => { const d = JSON.parse(localStorage.getItem('organizer:data')); const now = new Date().toISOString();
+          d.projects.push({ id: 'pp' + Date.now(), name: n, milestones: [], quantity: { current: 0, total: 10, unit: 'x' }, createdAt: now, updatedAt: now, deletedAt: null });
+          localStorage.setItem('organizer:data', JSON.stringify(d)); }""", project)
+        q.reload(); q.wait_for_function('() => window.__organizerReady === true')
         tab(q, 4)
-        q.fill('form[data-form="list.add"] input[name=name]', lst)
-        q.click('form[data-form="list.add"] button[type=submit]')
-        q.fill('form[data-form="item.add"] input[name=title]', item)
-        q.press('form[data-form="item.add"] input[name=title]', 'Enter')
-        q.locator('[data-action="list.saveTemplate"]').first.click()
+        q.click('#fab'); wait_sheet(q)
+        q.fill('#sheet-root form[data-form="list.add"] input[name=name]', lst)
+        q.click('#sheet-root form[data-form="list.add"] button[type=submit]'); q.wait_for_timeout(120)
+        add_text(q, item)
+        q.click('#more-btn'); wait_sheet(q)
+        q.click('#sheet-root [data-action="list.saveTemplate"]'); q.wait_for_timeout(80)
         tab(q, 2)
-        q.click('main details:has(form[data-form="series.add"]) > summary')
+        q.click('[data-fold=recurring] .foldhead')
+        q.click('[data-fold=recurring] [data-action="series.new"]'); wait_sheet(q)
         q.fill('form[data-form="series.add"] input[name=title]', rep)
         q.click('form[data-form="series.add"] button[type=submit]')
         tab(q, 0)
-        q.fill('form[data-form="wait.add"] input[name=title]', wait)
-        q.click('form[data-form="wait.add"] button[type=submit]')
+        q.click('#waiting-section [data-action="wait.new"]'); wait_sheet(q)
+        q.fill('#sheet-root input[name=title]', wait)
+        q.click('#sheet-root form button[type=submit]'); q.wait_for_timeout(80)
 
     dump = lambda q: q.evaluate("JSON.stringify(Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])))")
     ca, a = person()
@@ -148,16 +164,19 @@ with sync_playwright() as p:
         idb = b.evaluate("JSON.parse(localStorage.getItem('organizer:data')).dataId")
         check('У A и B разные случайные id органайзера', ida and idb and ida != idb)
         for q in (a, b):
-            q.reload(); q.wait_for_function('window.__organizerReady === true')
+            q.reload(); q.wait_for_function('() => window.__organizerReady === true')
         seen = {}
         for name, q in (('A', a), ('B', b)):
             seen[name] = ''
             for i in range(6):
                 tab(q, i); seen[name] += q.inner_text('main')
+                if i == 4:
+                    q.locator('#main .indexrow', has_text='-list' if name == 'B' else 'список').first.click(); q.wait_for_timeout(60)
+                    seen[name] += q.inner_text('main')
         check('После перезапуска каждый видит на всех вкладках только своё',
               all(m in seen['A'] for m in MARK_A) and not any(m in seen['A'] for m in MARK_B) and all(m in seen['B'] for m in MARK_B) and not any(m in seen['B'] for m in MARK_A))
         tab(a, 0); tab(b, 0)
-        check('Язык B (English) не повлиял на A', a.inner_text('#app-title') == 'Мой органайзер' and b.inner_text('#app-title') == 'My Organizer')
+        check('Язык B (English) не повлиял на A', a.inner_text('nav#nav').split()[0] == 'Сегодня' and b.inner_text('nav#nav').split()[0] == 'Today')
 
     @step('Только свои ключи хранилища')
     def _():
@@ -242,7 +261,7 @@ with sync_playwright() as p:
         a.set_input_files('input[data-action="import.file"]', path)
         a.wait_for_selector('button[data-action="import.apply"]', timeout=5000)
         a.click('button[data-action="import.apply"]')  # both confirmations accepted
-        a.reload(); a.wait_for_function('window.__organizerReady === true')
+        a.reload(); a.wait_for_function('() => window.__organizerReady === true')
         tab(a, 5)
         txt = a.inner_text('main')
         check('Странный файл: «Данные» открываются, карантин показан, ошибок нет', 'Карантин' in txt and len(page_errors) == n_err and 'Что-то пошло не так' not in txt, str(page_errors[n_err:]))

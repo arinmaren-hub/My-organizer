@@ -1,13 +1,14 @@
 # ROADMAP.md — release order
 
-Updated 2026-10-10. **Current version: 0.4.0** (the remaining core features built as one release at the owner's request; waiting for the owner's review).
+Updated 2026-10-10. **Current version: 0.5.0** (calm redesign over 0.4.0, built as one release at the owner's request; waiting for the owner's review). 0.4.0 is released and installed.
 Designs are in `DECISIONS.md` (sections B–B9). Release rules for data (R1–R12) are in `DECISIONS.md` section F; privacy rules (P1–P8) in section G and `SECURITY.md`.
-Each release is small, changes the data format at most once, keeps all existing data, and must be approved before work starts and reviewed before the next one begins. **The next release does not start until 0.4.0 is reviewed.**
+Each release is small, changes the data format at most once, keeps all existing data, and must be approved before work starts and reviewed before the next one begins. **The next release does not start until 0.5.0 is reviewed.**
 
 | Step | Version | Release | Data format change | Status |
 |---|---|---|---|---|
 | S1 + S2 | 0.3.0 | Interface language RU / EN; planning day and onboarding; data-preservation safeguards; privacy checks | schema 3 | **released** (installed) |
-| S3–S8 + calendar | 0.4.0 | Task editing; morning/evening reviews with memory; evening overview; smart quick entry; waiting for others; list templates and categories; recurring tasks; interactive calendar | schema 4: `series`, `waiting`, `templates`, task and list fields | **built and tested, waiting for the owner's review** |
+| S3–S8 + calendar | 0.4.0 | Task editing; morning/evening reviews with memory; evening overview; smart quick entry; waiting for others; list templates and categories; recurring tasks; interactive calendar | schema 4: `series`, `waiting`, `templates`, task and list fields | **released** (installed) |
+| UX | 0.5.0 | Calm redesign: 4 bottom tabs, «···» menus, «＋» multi-line entry, sheets instead of inline forms, indent by swipe, Lists index + Дом/Купить inventory, compact calendar, task ↔ event conversion, event preparation | none (schema 4; optional fields only) | **built and tested in Chromium, waiting for the owner's review and a real-iPhone check** |
 | next | — | Repeating events on the same engine (and the `.ics`/alerts work), recurrence end dates and «2nd Tuesday» rules, Phase 3 projects, Quarterly Cleanup (B3) | as designed | not started |
 
 
@@ -30,13 +31,17 @@ Each release is small, changes the data format at most once, keeps all existing 
 - **Planning day:** `planday.js`; «Сегодня», reviews, overdue detection and quick add follow the planning day; the screen changes day at the cutoff; onboarding (language, wake-up, bedtime, cutoff = bedtime, skip = 00:00); «Настройки» → «Мой день»; «Завершить день».
 - **Data safety and privacy (owner's rules of 2026-10-09):** daily copies (5) and rollback copies (5); guarded upgrade; `dataId` and a second confirmation for another organizer's backup; hardening against odd backup files; `SECURITY.md`; two-context privacy test; real-update upgrade test from 0.2.0, 0.2.1 and 0.2.2.
 
+### 0.5.0 — the calm redesign (see `DECISIONS.md` B11)
+- Viewing/using by default; editing only on request. Four tabs; header menu; «＋» multi-line entry; row menus; sheets; swipe indent; Lists index with Купить and Дом; compact calendar with conversion and preparation lists. Russian is the primary design language; English is the same components and dictionaries.
+- **Open decisions** (owner): how to create the first project now that Прогресс is hidden (B11 item 2); whether to link an event and the task made from it (B11 item 9); whether nested items (list, preparation, home) should get a «Deleted» restore; real-iPhone findings.
+
 ### 0.4.0 — S3 to S8 and the calendar, built as one release (see `DECISIONS.md` B10)
 - Task editing, morning and evening reviews with memory, evening overview, smart quick entry (RU/EN), waiting for others, list categories and templates, recurring tasks, interactive calendar. One schema change (4), only additive.
 - **Differences from the original proposals:** recurring tasks never record «missed» by themselves (unconfirmed occurrences wait for the person); the first release has daily/weekly/monthly/yearly rules with an interval, in two modes — no end dates, no multiple weekdays, no «2nd Tuesday» yet; built-in templates are stored in code and only overrides are saved.
 - **Left for later:** repeating events, `.ics` alerts, end dates and weekday rules for recurrence, projects (Phase 3), Quarterly Cleanup (B3).
 
 ## For every release (release gate — DECISIONS.md E12)
-- Unit tests (`tests.html`) in three time zones, and the full click-through suite (`e2e-test.py`) in both themes and both languages.
+- Unit tests (`tests.html`) in three time zones, and the full click-through suite (`e2e-v5-test.py`, `e2e-test.py`) in both themes and both languages, at 390 px and 320 px.
 - `privacy-test.py`: two independent browser contexts; isolation, no data sent anywhere, CSP.
 - `upgrade-test.py`: a real service-worker update from **every supported earlier version** with realistic data, two people side by side, compared field by field.
 - A frozen sample of every earlier data version in the unit tests, upgraded and compared field by field.

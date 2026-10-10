@@ -24,6 +24,7 @@ shutil.rmtree(SITE, ignore_errors=True)
 shutil.copytree(OLD, SITE)
 ver = lambda d: re.search(r"APP_VERSION = '([^']+)'", open(os.path.join(d, 'version.js'), encoding='utf-8').read()).group(1)
 OLD_V, NEW_V = ver(OLD), ver(NEW)
+SAME = OLD_V >= '0.4'   # 0.4.0 → 0.5.0: same data format (schema 4), so no migration, no «before migration» copy and no read-only window
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -92,7 +93,7 @@ with sync_playwright() as p:
     dump = lambda q: q.evaluate("Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)]))")
 
     def ready(q):
-        q.wait_for_function('window.__organizerReady === true', timeout=15000)
+        q.wait_for_function('() => window.__organizerReady === true', timeout=15000)
 
     def open_old(tag, appearance):
         c = browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id='Europe/Athens', accept_downloads=True)
@@ -205,7 +206,12 @@ with sync_playwright() as p:
             mig = [c for c in rb if c['reason'] == 'before-migration']
             n_mig = 1 if OLD_V < '0.3' else 2        # 0.3.0 already made its own copy when it moved schema 2 → 3
             mig.sort(key=lambda c: c['at'])
-            check(f'{tag}: исходный текст сохранён как копия для отката — побайтно', len(mig) == n_mig and mig[-1]['raw'] == old_raw)
+            if SAME:
+                old_rb = json.loads(before.get('organizer:rollback') or '[]')
+                check(f'{tag}: тот же формат данных — новых копий «перед обновлением» не создаётся, прежние на месте', len(rb) == len(old_rb) and all(c in rb for c in old_rb))
+                check(f'{tag}: данные на диске совпадают с данными {OLD_V} (все поля записей)', records(new) == records(old))
+            else:
+                check(f'{tag}: исходный текст сохранён как копия для отката — побайтно', len(mig) == n_mig and mig[-1]['raw'] == old_raw)
             old_copies = json.loads(before.get('organizer:snapshots') or '[]') + json.loads(before.get('organizer:rollback') or '[]')
             new_copies = json.loads(after.get('organizer:snapshots') or '[]') + rb
             key = lambda c: (c.get('id') or c['at'], c['reason'])
@@ -214,7 +220,7 @@ with sync_playwright() as p:
             check(f'{tag}: ни один ключ хранилища не удалён', set(before) <= set(after), str(set(before) - set(after)))
             check(f'{tag}: оформление и сведения устройства не тронуты',
                   after.get('organizer:appearance') == before.get('organizer:appearance') and json.loads(after['organizer:device']).get('lastBackupAt') == json.loads(before['organizer:device']).get('lastBackupAt'))
-            check(f'{tag}: сообщение «Данные переведены в новый формат»', 'переведены в новый формат' in P['banners'], P['banners'][:200])
+            check(f'{tag}: сообщение «Данные переведены в новый формат»' if not SAME else f'{tag}: сообщения о переводе данных нет (формат не менялся)', ('переведены в новый формат' in P['banners']) != SAME, P['banners'][:200])
             check(f'{tag}: вопросы о дне: после обновления с 0.2.x задаются один раз, с 0.3.0 не повторяются', P['onboarding'] == (OLD_V < '0.3'))
             other = 'B' if tag == 'A' else 'A'
             check(f'{tag}: в хранилище нет ни одной записи другого человека', f'{other}-личная' not in json.dumps(after, ensure_ascii=False) and f'{other}-' not in after['organizer:data'])
@@ -226,6 +232,11 @@ with sync_playwright() as p:
         w.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'organizer:data' }))")
         w.fill('form[data-form="task.quickAdd"] textarea', 'из старого окна')
         w.click('form[data-form="task.quickAdd"] button[type=submit]')
+        if SAME:
+            after_w = json.loads(w.evaluate("localStorage.getItem('organizer:data')"))
+            before_w = json.loads(disk)
+            check('Старое окно (тот же формат): записанное им не стирает прежних записей и их полей', all(t in after_w['tasks'] for t in before_w['tasks']) and after_w['quarantine'] == before_w['quarantine'])
+            w.close(); return
         check('Старое окно: только чтение (данные новее его версии)', 'Только чтение' in w.inner_text('#banners') or 'только чтения' in w.inner_text('#banners').lower(), w.inner_text('#banners')[:200])
         check('Старое окно: ничего не записало', w.evaluate("localStorage.getItem('organizer:data')") == disk)
         w.close()
@@ -238,23 +249,29 @@ with sync_playwright() as p:
             B.fill('input[name=bed]', '00:30')
             B.click('form[data-form="onboarding.save"] button[type=submit]')
         for tag, q in (('A', A), ('B', B)):
-            q.wait_for_selector('nav button')
+            q.wait_for_selector('nav#nav button')
             q.reload(); ready(q)
             after = dump(q)
             new = json.loads(after['organizer:data'])
             old = json.loads(people[tag]['before']['organizer:data'])
-            check(f'{tag}: записи по-прежнему совпадают с данными {OLD_V}', records(new) == records(old))
+            check(f'{tag}: записи по-прежнему совпадают с данными {OLD_V}' + (' (плюс записанное старым окном)' if SAME and tag == 'A' else ''),
+                  all(t in new['tasks'] for t in old['tasks']) if (SAME and tag == 'A') else records(new) == records(old))
             rb = json.loads(after['organizer:rollback'])
-            check(f'{tag}: копия перед обновлением не дублируется при перезапуске', sum(c['reason'] == 'before-migration' for c in rb) == (1 if OLD_V < '0.3' else 2))
+            check(f'{tag}: копия перед обновлением не дублируется при перезапуске', SAME or sum(c['reason'] == 'before-migration' for c in rb) == (1 if OLD_V < '0.3' else 2))
         if OLD_V < '0.3':
             check('B: конец дня = время сна (00:30)', json.loads(dump(B)['organizer:data'])['settings']['day']['cutoff'] == '00:30')
 
     @step('Откат к данным до обновления')
     def _():
         q = people['A']['page']
-        q.fill('form[data-form="task.quickAdd"] textarea', 'после обновления')
-        q.click('form[data-form="task.quickAdd"] button[type=submit]')
-        q.click('nav button >> nth=5')
+        q.click('#fab'); q.wait_for_selector('#sheet-root textarea'); q.wait_for_timeout(260)
+        q.fill('#sheet-root textarea', 'после обновления')
+        q.click('#sheet-root form button[type=submit]'); q.wait_for_timeout(100)
+        q.click('nav#nav button >> nth=0'); q.click('#more-btn'); q.wait_for_selector('#sheet-root .sheet'); q.wait_for_timeout(260)
+        q.click('#sheet-root [data-action="go"][data-tab="data"]')
+        if SAME:
+            check('Тот же формат: раздел автокопий открывается, копии доступны для восстановления', q.locator('button[data-action="snapshot.restore"]').count() >= 1)
+            return
         row = q.locator('.row:has-text("перед обновлением формата данных")')
         check('В «Автокопиях» видна копия «перед обновлением формата данных»', row.count() == (1 if OLD_V < '0.3' else 2))
         row.first.locator('button[data-action="snapshot.restore"]').click()
@@ -271,7 +288,7 @@ with sync_playwright() as p:
         before = q.evaluate("localStorage.getItem('organizer:data')")
         people['B']['ctx'].set_offline(True)
         q.reload(); ready(q)
-        check('Без сети открывается новая версия с теми же данными', q.evaluate("localStorage.getItem('organizer:data')") == before and 'B-' in q.inner_text('main'))
+        check('Без сети открывается новая версия с теми же данными', q.evaluate("localStorage.getItem('organizer:data')") == before and (q.click('nav#nav button >> nth=2'), 'B-' in q.inner_text('main'))[1])
         people['B']['ctx'].set_offline(False)
 
     check('Нет необработанных ошибок JavaScript', not errors, '; '.join(errors[:3]))

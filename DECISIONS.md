@@ -283,6 +283,26 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 
 ---
 
+## B11. What 0.5.0 built (the calm redesign, owner's brief of 2026-10-10) — decisions and deviations
+
+**Principle:** viewing and using is the default; editing and management appear only on request (a «···» menu, a tap on a title, or «＋»). Built on the 0.4.0 code: no rebuild, no rename of storage keys, schema stays 4, no migration.
+
+1. **Navigation.** Four fixed bottom tabs: Сегодня, Календарь, Задачи, Списки. Secondary screens — Вечер, Настройки, Копии и данные, О приложении, Прогресс — are reached from «···» at the top right and have a back button. Language and appearance are also directly in that menu.
+2. **Progress/Projects is hidden, not removed** (code, data, schema, backups all kept). «Прогресс» appears in «···» only while at least one active project exists. **Consequence to confirm:** the screen has no «create project» entry point any more, so a person who has no project cannot make the first one from the UI. Options: (a) leave it hidden until Phase 3 redesigns projects (current choice, consistent with the brief); (b) add «Новый проект» to «···»; (c) a Settings switch «Показать Прогресс».
+3. **Tails.** Same morning/evening decisions and memory. «Оставить как есть» used to be a button on the row; it is now the first item of the task's «···» menu for tail rows (and in the long-press menu), so the row keeps four quiet actions. The remembered decision (`review`) is unchanged.
+4. **Fast entry.** One multiline field; one non-empty line = one task; one «Добавить» saves all lines. Default date = the planning day (Home) or the selected real calendar date (Calendar); an explicit date in the text wins; a line with only a deadline («до пятницы») is planned for the default day; a line with a clock time asks Task / Event / Title only; the question is asked per line, edits of the text while it is open drop the question (nothing added, nothing erased).
+5. **Rows.** checkbox + title + small date/time + one «···». A tap on the title edits; long press and right-click open the menu (never the only path). Reschedule never changes the deadline.
+6. **Indent.** Optional `task.indent: true` (one level only). Pointer-event swipe (≥ 44 px, horizontal), right sets, left clears; rows keep `touch-action: pan-y`, so vertical scrolling, the checkbox and the menu button are unaffected. It is cleared when an unfinished task becomes a tail, is moved to another date/week/no date, or is edited to another plan. No handle, no drag-and-drop, no reorder control.
+7. **Home inventory.** One ordinary list with `kind: 'home'` (created on the first «＋» in «Дом»), items carry `stock: 'have' | 'low' | 'out'`. Matching is by `kind`, never by name: a user's own list named «Купить» or «Дом» stays a separate list. «Купить» is generated from `stock === 'out'`; ticking an item there sets `have` (no delete, no duplicate). The Home list cannot be deleted from the UI. Adding a name that already exists (case-insensitive) does not duplicate it.
+8. **Lists.** Index → list screen (back navigation, collapsible categories, per-item tap-to-edit, «＋» adds several items); management in the list's «···»; new list: blank / from template / manage templates; built-in templates are code, edits become a copy (`base`), built-in item ids are kept so a tapped item is found in the copy. Creating from a template never alters the template.
+9. **Task ↔ event.** Atomic: the new record is created and the original soft-deleted in one update. Title, date, time are always kept. Losses — task→event: deadline, completion, remembered review, project link; event→task: end time, repeat, alerts, preparation items — are listed and need the confirmation tap (`confirmed`); recurring-series occurrences cannot be converted. A reminder moves to the event's alert (and a task copy keeps it). **Known:** restoring the soft-deleted original from «Данные → Удалённые» brings back the original next to its counterpart (a deliberate manual action; the app does not link them).
+10. **Event preparation.** Optional `event.prep` array of items (same item shape, soft-deleted); shown collapsed in the event sheet («Добавить подготовку» until created), count «done/total» in the sheet header and next to the event in lists. Not shown under «Удалённые» (nested items are never listed there); the delete confirmation says so (`confirm.deleteItem`), the data stays 30 days and in every copy/export.
+11. **Sheets.** Menus, forms and the «＋» field are bottom sheets (`ui.sheet`), rebuilt only when their HTML changes, so typing and the keyboard survive redraws. `shut()` closes the sheet before an action; if the action is refused, the sheet comes back **with what the person had typed**.
+12. **Waiting for others.** «Ожидаю от других» from a task keeps the task's deadline as the follow-up date.
+13. **Offline cache safety.** The service worker fetches each file as `file?v=<version>` and stores it under the plain address; it refuses to install if `version.js` does not show the version of `sw.js`. A half-uploaded site cannot become the offline copy.
+14. **Language.** Russian is the primary design language (all layouts tuned in Russian first); English uses the same components and the same central dictionaries (no language-specific screens) and was re-checked for overflow, navigation, forms and workflows at 390 px and 320 px. The language is chosen by hand and never taken from the device.
+15. **Not done / not decided.** Real iPhone/Safari testing; keyboard handling is implemented with `visualViewport` and only simulated; no drag reordering by design; restore of nested items; linking an event and the task made from it; an end date for events.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure
@@ -421,6 +441,8 @@ Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `
 
 **Template** (`templates`): `id, name, base (id of the built-in it overrides, or null), items [{ id, title, category }], categories [names], createdAt, updatedAt, deletedAt`. Built-in templates live in code (`i18n-v4.js`); a record with `base` is the person's edited copy of a built-in, or (with `deletedAt`) a marker that it was deleted. Markers are never purged.
 
+**Added in 0.5.0 (all optional, schema stays 4, validated leniently — a wrong value is dropped, the record is kept):** task `indent` (`true` or absent); list `kind` (`'home'` only, the home inventory) and list-item `stock` (`'have'│'low'│'out'`); event `prep` (absent, or an array of items `{ id, title, done, createdAt, updatedAt, deletedAt }`; absent = no preparation created). 0.4.0 code that opens such data keeps these fields (tested).
+
 **Quarantine entry:** `{ at, source: 'load'│'import'│'legacy'│…, collection, parentId, reason, record }`.
 
 Unknown extra fields on records are preserved. Changing the format means: bump `SCHEMA_VERSION`, add an upgrade step in `schema.js`, add a test.
@@ -434,7 +456,7 @@ A version **must not be published** if a critical migration or data-isolation te
 | # | Rule | How it is met (0.3.0) | Tested by |
 |---|---|---|---|
 | R1 | Never reset, erase or overwrite user data during an update. | The service worker caches only app files and never touches storage; data is changed only through `store.js`. | `upgrade-test.py`; unit test on `sw.js` |
-| R2 | Every schema change has a backward-compatible upgrade from every supported earlier version. | `schema.js → normalizeDoc` upgrades v1 → v3 and v2 → v3 in one chain. Supported: prototype (v1), 0.2.0–0.2.2 (v2). | unit tests «Перенос данных», «Сохранность данных при обновлении» |
+| R2 | Every schema change has a backward-compatible upgrade from every supported earlier version. (0.5.0: no schema change; additive optional fields only.) | `schema.js → normalizeDoc` upgrades v1 → v3 and v2 → v3 in one chain. Supported: prototype (v1), 0.2.0–0.2.2 (v2). | unit tests «Перенос данных», «Сохранность данных при обновлении» |
 | R3 | Before an upgrade: validate, keep a recoverable copy; if it fails, don't overwrite the original, explain, offer recovery. | Guarded upgrade (section C, rule 10): record check + exact-text rollback copy first; otherwise read-only + «Скачать исходные данные» (+ «Продолжить без копии» when only space was missing). | unit tests (copy failure, crash, six kinds of lost record) |
 | R4 | Test upgrades with realistic saved data from all previous supported versions. | 0.2.0, 0.2.1 and 0.2.2 builds, real data (80 tasks, 15 events, projects, lists, quarantine) and copies made by the old code itself. | `upgrade-test.py` × 3 versions; e2e (prototype) |
 | R5 | Completed tasks, deadlines, recurring history, projects, list items, settings and all other records intact. | Upgrade compares every collection field by field. (Recurring tasks do not exist yet; the event repeat rule is checked.) | `upgrade-test.py`, unit tests |
@@ -478,3 +500,10 @@ Details, limits and evidence are in `SECURITY.md`. Rules every future update mus
 11. **Required tests:** overnight dates (cutoff × time-of-day × month/year end × daylight-saving nights × several time zones), recurrence (rule calendars, idempotent generation, no duplicates with two windows or after import) and data migration. The full click-through suite runs in both themes and in both languages.
 12. **Release gate (owner, 2026-10-09):** a version is published only when `tests.html`, `e2e-test.py`, `privacy-test.py` and `upgrade-test.py` (from every supported earlier version) all pass, and `TESTING.md` holds the migration report with the remaining data-loss risks. A failed migration or isolation test blocks the release.
 13. **Future updates preserve data isolation** (section G) and the release rules (section F).
+
+### B12. Restoring a converted original (0.5.0)
+- Task ↔ event conversion records `convertedFrom` (on the new record) and `convertedTo` (on the original) — plain ids, optional, dropped by validation if malformed (never quarantined).
+- **Rule:** among all records connected by conversions (any chain length, either direction) **at most one is active**. Restoring a deleted member while another is active needs an explicit confirmation; on confirm the active one is soft-deleted (restorable for 30 days) and the restored one becomes active. Without confirmation nothing changes. If the other side is already deleted or purged, restoring needs no question.
+- Nothing is merged: edits made to either record stay in that record.
+- Known limit: «Ожидаю от других» made from a task is **not** linked this way, so restoring that task from «Удалённые» while the waiting item is active gives both. Nothing is lost.
+- Known limit: importing a backup that already has both sides active is not corrected.

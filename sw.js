@@ -6,7 +6,7 @@
 // that an update exists; they then show the "new version available" banner.
 // If you add a new file, add it to ASSETS too (tests.html checks both).
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const CACHE = 'organizer-' + VERSION;
 const ASSETS = [
   './',
@@ -39,6 +39,10 @@ const ASSETS = [
   './appearance.js',
   './i18n.js',
   './i18n-v4.js',
+  './i18n-v5.js',
+  './home.js',
+  './icons.js',
+  './view-sheets.js',
   './parsedate.js',
   './recur.js',
   './templates.js',
@@ -50,9 +54,23 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
-  // cache: 'reload' bypasses the browser's HTTP cache so a new version gets fresh files.
-  event.waitUntil(caches.open(CACHE).then(cache =>
-    cache.addAll(ASSETS.map(url => new Request(url, { cache: 'reload' })))));
+  // Every file is fetched with «?v=<version>» and cache: 'reload': the address is new for this version, so neither the
+  // browser's cache nor a CDN in front of the site can hand back an old copy of one file next to new copies of the others.
+  // The copy is stored under the plain address. If version.js does not say this version, the install stops and is
+  // tried again later (a half-uploaded site never becomes the offline copy).
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    const fetched = [];
+    for (const url of ASSETS) {
+      const res = await fetch(new Request(`${url}?v=${encodeURIComponent(VERSION)}`, { cache: 'reload' }));
+      if (!res.ok) throw new Error(`${url}: ${res.status}`);
+      // the body is read right away (an unread response keeps its connection busy and the next fetch would wait for it)
+      fetched.push([url, new Response(await res.arrayBuffer(), { status: res.status, statusText: res.statusText, headers: res.headers })]);
+    }
+    const ver = fetched.find(([u]) => u === './version.js');
+    if (ver && !(await ver[1].clone().text()).includes(`'${VERSION}'`)) throw new Error('version.js does not match sw.js');
+    for (const [url, res] of fetched) await cache.put(url, res);
+  })());
   // No skipWaiting() here: the new version waits until the user taps "Обновить".
 });
 

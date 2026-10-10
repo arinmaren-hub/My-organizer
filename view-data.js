@@ -49,6 +49,26 @@ function importSection(ui) {
     </section>`;
 }
 
+export function aboutSection(doc, ctx) {
+  const { ui } = ctx;
+  const info = ui.storageInfo || {};
+  const persist = info.persisted === true ? 'persist.yes' : info.persisted === false ? 'persist.no' : 'persist.unknown';
+  return `
+    <section class="card">
+      <h2>${esc(t('data.about'))}</h2>
+      <p class="small">${esc(t('data.privacy', { address: ctx.address || '' }))}</p>
+      <p class="muted small">
+        ${esc(t('data.version', { v: APP_VERSION, s: SCHEMA_VERSION }))}<br>
+        ${esc(t('data.standalone', { yn: { $t: ui.standalone ? 'yes' : 'no' } }))}<br>
+        ${esc(t('data.offline', { state: ui.swState ? msg(ui.swState) : t('sw.inactive') }))}<br>
+        ${esc(t('data.persist', { state: { $t: persist } }))}<br>
+        ${esc(info.quota ? t('data.usedOf', { used: sizeText(info.usage), quota: sizeText(info.quota) }) : t('data.used', { used: sizeText(info.usage) }))}
+      </p>
+    </section>`;
+}
+
+export const renderAbout = (doc, ctx) => aboutSection(doc, ctx);
+
 export function renderData(doc, ctx) {
   const { store, ui, backupText } = ctx;
   const st = store.status;
@@ -56,9 +76,6 @@ export function renderData(doc, ctx) {
   const snaps = store.listSnapshots();
   const deleted = deletedRecords(doc);
   const rescue = store.rescueList();
-  const info = ui.storageInfo || {};
-  const persist = info.persisted === true ? 'persist.yes' : info.persisted === false ? 'persist.no' : 'persist.unknown';
-
   let h = `
     <section class="card">
       <h2>${esc(t('data.save'))}</h2>
@@ -131,17 +148,6 @@ export function renderData(doc, ctx) {
     </section>`;
   }
 
-  h += `
-    <section class="card">
-      <h2>${esc(t('data.about'))}</h2>
-      <p class="small">${esc(t('data.privacy', { address: ctx.address || '' }))}</p>
-      <p class="muted small">
-        ${esc(t('data.version', { v: APP_VERSION, s: SCHEMA_VERSION }))}<br>
-        ${esc(t('data.standalone', { yn: { $t: ui.standalone ? 'yes' : 'no' } }))}<br>
-        ${esc(t('data.offline', { state: ui.swState ? msg(ui.swState) : t('sw.inactive') }))}<br>
-        ${esc(t('data.persist', { state: { $t: persist } }))}<br>
-        ${esc(info.quota ? t('data.usedOf', { used: sizeText(info.usage), quota: sizeText(info.quota) }) : t('data.used', { used: sizeText(info.usage) }))}
-      </p>
-    </section>`;
+  h += aboutSection(doc, ctx);
   return h;
 }

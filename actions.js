@@ -2,13 +2,14 @@
 // Each one edits a draft copy inside store.update(); throwing an Error cancels it
 // and shows the message. Screens call these; they never edit data themselves.
 
-import { newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, PLAN_KINDS, SERIES_FREQS, SERIES_MODES } from './schema.js';
+import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, PLAN_KINDS, SERIES_FREQS, SERIES_MODES } from './schema.js';
 import { isDateKey, isDateTime, isTime, weekKey, addDays } from './dates.js';
 import { parseQuick } from './parsedate.js';
 import { ensureOccurrences, afterCompletion, isOpen } from './recur.js';
 import { isBuiltinId, baseOf, builtinTemplate } from './templates.js';
 import { clone } from './util.js';
 import { suggestCutoff } from './planday.js';
+import { homeList, stockOf } from './home.js';
 import { appError, t, getLang } from './i18n.js';
 
 // `what` is a message key such as 'what.task'.
@@ -107,7 +108,9 @@ export function editTask(store, id, f) {
     const deadline = optDate(f.deadline);
     if (deadline !== null && !isDateKey(deadline)) throw appError('err.badDate');
     t.title = title;
-    t.plan = planFor(f.kind, f.date, today);
+    const plan = planFor(f.kind, f.date, today);
+    if (plan.kind !== t.plan.kind || plan.date !== t.plan.date) delete t.indent; // moved to another date: no indentation
+    t.plan = plan;
     t.time = time;
     if (time === null) t.reminder = null;
     t.deadline = deadline;
@@ -168,6 +171,7 @@ export function moveTask(store, id, kind, dateInput = '') {
     const t = findAlive(d.tasks, id, 'what.task');
     if (kind === 'tomorrow') { kind = 'day'; dateInput = addDays(today, 1); }
     t.plan = planFor(kind, dateInput, today);
+    delete t.indent;                                                  // moved by hand: indentation is reset
     if (t.plan.kind !== 'day') { t.time = null; t.reminder = null; } // a time only makes sense on a day
     t.updatedAt = now;
   });
@@ -198,12 +202,56 @@ export function softDelete(store, collection, id) {
   });
 }
 
-export function restoreDeleted(store, collection, id) {
+// Records connected to `rec` by task ↔ event conversions (in either direction, through any number of
+// steps), other than `rec` itself. A task is always linked to events and an event to tasks.
+function convertedGroup(d, collection, rec) {
+  const other = c => (c === 'tasks' ? 'events' : 'tasks');
+  const seen = new Map([[`${collection}:${rec.id}`, { collection, rec }]]);
+  const queue = [{ collection, rec }];
+  while (queue.length) {
+    const { collection: c, rec: x } = queue.shift();
+    const oc = other(c);
+    for (const y of d[oc]) {
+      const linked = x.convertedTo === y.id || x.convertedFrom === y.id || y.convertedTo === x.id || y.convertedFrom === x.id;
+      const key = `${oc}:${y.id}`;
+      if (linked && !seen.has(key)) { const n = { collection: oc, rec: y }; seen.set(key, n); queue.push(n); }
+    }
+  }
+  seen.delete(`${collection}:${rec.id}`);
+  return [...seen.values()];
+}
+
+// The live records that restoring (collection, id) would duplicate: the original/copy of a task↔event
+// conversion that is currently alive. Empty when there is no conflict.
+export function restoreConflicts(doc, collection, id) {
+  if (collection !== 'tasks' && collection !== 'events') return [];
+  const r = doc[collection].find(x => x.id === id && x.deletedAt);
+  if (!r) return [];
+  return convertedGroup(doc, collection, r).filter(x => !x.rec.deletedAt).map(x => ({ collection: x.collection, id: x.rec.id, title: x.rec.title }));
+}
+
+// Restore rule: at most one record of a converted pair/chain is alive. If the other one is alive,
+// nothing happens unless `confirmed`; then the live one is moved to «Удалённые» (soft-deleted, still
+// restorable for 30 days — it swaps places with the restored one), so nothing is lost or doubled.
+export function restoreDeleted(store, collection, id, { confirmed = false } = {}) {
   return store.update('act.restore', (d, ctx) => {
     const { now } = ctx;
     if (!LABELS[collection]) throw appError('err.unknownCollection');
     const r = d[collection].find(x => x.id === id && x.deletedAt);
     if (!r) throw appError('err.deletedNotFound');
+    // A deleted built-in template is only an empty marker. Restoring it brings the built-in's content back
+    // (or, if a live copy exists already, just drops the marker).
+    if (collection === 'templates' && r.base && !(r.items || []).length && !(r.categories || []).length) {
+      if (d.templates.some(x => x !== r && x.base === r.base && !x.deletedAt)) { d.templates.splice(d.templates.indexOf(r), 1); return; }
+      const b = builtinTemplate(r.base, getLang());
+      r.name = b.name; r.categories = [...b.categories];
+      r.items = b.items.map(i => newItem({ id: ctx.uid(), title: i.title, category: i.category, now }));
+    }
+    if (collection === 'tasks' || collection === 'events') {
+      const live = convertedGroup(d, collection, r).filter(x => !x.rec.deletedAt);
+      if (live.length && !confirmed) throw appError('err.restoreConvertedConfirm');
+      for (const x of live) { x.rec.deletedAt = now; x.rec.updatedAt = now; }
+    }
     // A completion-based series has ONE open occurrence. Restoring an open one while another exists:
     // the other is removed if it is an untouched app-made clone, otherwise the restore is refused.
     if (collection === 'tasks' && r.seriesId && isOpen({ ...r, deletedAt: null })) {
@@ -286,7 +334,9 @@ export function setQuantity(store, projectId, value) {
 export function addList(store, name) {
   return store.update('act.addList', (d, { now, uid }) => {
     if (!String(name || '').trim()) throw appError('err.needTitle');
-    d.lists.push(newList({ id: uid(), name: String(name).trim(), now }));
+    const l = newList({ id: uid(), name: String(name).trim(), now });
+    d.lists.push(l);
+    return l.id;
   });
 }
 
@@ -369,6 +419,7 @@ function applyReview(d, ctx, t, choice, arg, part) {
     if (t.seriesId) ensureOccurrences(d, ctx);
   } else throw appError('err.unknownReview');
   if (t.plan.kind !== 'day') { t.time = null; t.reminder = null; }
+  if (mark === 'moved') delete t.indent;
   t.review = { day: today, choice: mark, part: part === 'pm' ? 'pm' : 'am' };
   t.updatedAt = now;
 }
@@ -550,9 +601,12 @@ function container(d, ctx, coll, id) {
   if (!LIST_COLLS.includes(coll)) throw appError('err.unknownCollection');
   if (coll === 'templates' && isBuiltinId(id)) {
     const b = builtinTemplate(baseOf(id), getLang());
+    const live = d.templates.find(x => x.base === b.base && !x.deletedAt);
+    if (live) return live;
     const rec = newTemplate({ id: ctx.uid(), name: b.name, base: b.base, now: ctx.now });
     rec.categories = [...b.categories];
-    rec.items = b.items.map(i => newItem({ id: ctx.uid(), title: i.title, category: i.category, now: ctx.now }));
+    // the built-in's item ids are kept, so the item the person just tapped is found in the copy
+    rec.items = b.items.map(i => newItem({ id: i.id || ctx.uid(), title: i.title, category: i.category, now: ctx.now }));
     d.templates.push(rec);
     return rec;
   }
@@ -583,6 +637,8 @@ export function editContainerItem(store, coll, id, itemId, { title, category }) 
     const i = findAlive(c.items, itemId, 'what.item');
     const text = String(title || '').trim();
     if (!text) throw appError('err.needItemTitle');
+    // «Дом» keeps one row per thing: a rename onto another live item's name would create a second one
+    if (c.kind === 'home' && c.items.some(x => x !== i && !x.deletedAt && x.title.trim().toLocaleLowerCase() === text.toLocaleLowerCase())) throw appError('lists.homeDup');
     i.title = text;
     i.category = category ? String(category) : null;
     i.updatedAt = ctx.now;
@@ -667,7 +723,7 @@ export function restoreBuiltinTemplates(store, bases) {
   return store.update('act.template', (d, { now, uid }) => {
     for (const base of bases) {
       const b = builtinTemplate(base, getLang());
-      const tpl = newTemplate({ id: uid(), name: b.name, now });
+      const tpl = newTemplate({ id: uid(), name: b.name, base, now });
       tpl.categories = [...b.categories];
       tpl.items = b.items.map(i => newItem({ id: uid(), title: i.title, category: i.category, now }));
       d.templates.push(tpl);
@@ -700,3 +756,227 @@ export function addOnDate(store, { as, title, date, time }) {
 }
 
 export const addDaysKey = addDays;
+
+// =====================================================================
+// 0.5.0
+// =====================================================================
+
+// ---------- Indentation (one step to the right, no other meaning) ----------
+
+export function setIndent(store, id, on) {
+  return store.update('act.indent', (d, { now }) => {
+    const t = findAlive(d.tasks, id, 'what.task');
+    if (on) t.indent = true; else delete t.indent;
+    t.updatedAt = now;
+  });
+}
+
+// An unfinished task that has become a tail (its day or week is over) loses its indentation.
+// Touches nothing else, and writes only when there is something to reset.
+export function clearTailIndents(store) {
+  const today = store.planningToday();
+  const wk = weekKey(today);
+  const isTail = t => !t.done && ((t.plan.kind === 'day' && t.plan.date < today) || (t.plan.kind === 'week' && t.plan.date < wk));
+  if (!store.doc.tasks.some(t => t.indent && !t.deletedAt && isTail(t))) return 0;
+  return store.update('act.indent', (d, { now }) => {
+    let n = 0;
+    for (const t of d.tasks) if (t.indent && !t.deletedAt && isTail(t)) { delete t.indent; t.updatedAt = now; n++; }
+    return n || undefined;
+  });
+}
+
+// ---------- More task actions ----------
+
+export function duplicateTask(store, id) {
+  return store.update('act.duplicate', (d, { now, uid }) => {
+    const src = findAlive(d.tasks, id, 'what.task');
+    const copy = newTask({ id: uid(), title: src.title, plan: { ...src.plan }, now });
+    copy.time = src.time; copy.deadline = src.deadline; copy.projectId = src.projectId;
+    copy.reminder = src.reminder ? { ...src.reminder } : null;
+    d.tasks.push(copy);
+    return copy.id;
+  });
+}
+
+// «Жду ответа»: the task becomes a waiting item. The task is soft-deleted (restorable for 30 days),
+// so its deadline and plan are not lost.
+export function taskToWaiting(store, id) {
+  return store.update('act.toWaiting', (d, ctx) => {
+    const t = findAlive(d.tasks, id, 'what.task');
+    // the task's deadline becomes the follow-up date, so it is not lost with the soft-deleted task
+    d.waiting.push(newWaiting({ id: ctx.uid(), title: t.title, followUp: t.deadline || null, now: ctx.now }));
+    t.deletedAt = ctx.now; t.updatedAt = ctx.now;
+    if (t.seriesId) ensureOccurrences(d, ctx);
+  });
+}
+
+// ---------- Task ↔ event (nothing is lost silently, nothing is duplicated) ----------
+
+// What a task would lose if it became an event.
+export function taskConversionLosses(t) {
+  const out = [];
+  if (t.deadline) out.push('deadline');
+  if (t.done) out.push('done');
+  if (t.review) out.push('review');
+  if (t.projectId) out.push('project');
+  if (t.reminder) out.push('reminder'); // kept only if the time stays the same (see convertTaskToEvent)
+  return out;
+}
+
+// What an event would lose if it became a task.
+export function eventConversionLosses(e) {
+  const out = [];
+  if (Array.isArray(e.prep) && e.prep.some(i => !i.deletedAt)) out.push('prep');
+  if (e.end) out.push('end');
+  if (e.repeat) out.push('repeat');
+  if (Array.isArray(e.alerts) && e.alerts.length) out.push('alerts');
+  return out;
+}
+
+// Task → event on the task's calendar date at `time` (a day task, or a date given for other kinds).
+// Both records change in one step: the event is added and the task is soft-deleted (so it can be
+// restored from «Данные → Удалённые»). Anything the event cannot hold needs `confirmed`.
+export function convertTaskToEvent(store, id, { date = '', time = '', confirmed = false } = {}) {
+  return store.update('act.convert', (d, { now, uid }) => {
+    const t = findAlive(d.tasks, id, 'what.task');
+    if (t.seriesId) throw appError('err.convertSeries');
+    const day = t.plan.kind === 'day' ? t.plan.date : date;
+    if (!isDateKey(day)) throw appError('err.needDate');
+    const tm = String(time || t.time || '').slice(0, 5);
+    if (!isTime(tm)) throw appError('err.needDateTime');
+    const lost = taskConversionLosses(t).filter(x => x !== 'reminder' || tm !== t.time);
+    if (lost.length && !confirmed) throw appError('err.convertConfirm');
+    const e = newEvent({ id: uid(), title: t.title, start: `${day}T${tm}`, now });
+    if (t.reminder && tm === t.time) e.alerts = [{ minutesBefore: t.reminder.minutesBefore }];
+    e.convertedFrom = t.id; t.convertedTo = e.id; // so a restored original does not duplicate the copy
+    d.events.push(e);
+    t.deletedAt = now; t.updatedAt = now;
+    return e.id;
+  });
+}
+
+// Event → task planned for the event's date and time.
+export function convertEventToTask(store, id, { confirmed = false } = {}) {
+  return store.update('act.convert', (d, { now, uid }) => {
+    const e = findAlive(d.events, id, 'what.event');
+    if (eventConversionLosses(e).length && !confirmed) throw appError('err.convertConfirm');
+    const task = newTask({ id: uid(), title: e.title, plan: { kind: 'day', date: e.start.slice(0, 10) }, now });
+    task.time = e.start.slice(11, 16);
+    task.convertedFrom = e.id; e.convertedTo = task.id;
+    d.tasks.push(task);
+    e.deletedAt = now; e.updatedAt = now;
+    return task.id;
+  });
+}
+
+// ---------- Event preparation checklist (stays inside the event) ----------
+
+export function createPrep(store, eventId) {
+  return store.update('act.prep', (d, { now }) => {
+    const e = findAlive(d.events, eventId, 'what.event');
+    if (!Array.isArray(e.prep)) { e.prep = []; e.updatedAt = now; }
+  });
+}
+
+export function addPrepItems(store, eventId, text) {
+  const lines = String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
+  return store.update('act.prep', (d, { now, uid }) => {
+    if (!lines.length) throw appError('err.needItemTitle');
+    const e = findAlive(d.events, eventId, 'what.event');
+    if (!Array.isArray(e.prep)) e.prep = [];
+    for (const title of lines) e.prep.push(newItem({ id: uid(), title, now }));
+    e.updatedAt = now;
+    return lines.length;
+  });
+}
+
+function prepItem(d, eventId, itemId) {
+  const e = findAlive(d.events, eventId, 'what.event');
+  return { e, i: findAlive(e.prep || [], itemId, 'what.item') };
+}
+
+export function setPrepDone(store, eventId, itemId, done) {
+  return store.update('act.prep', (d, { now }) => {
+    const { e, i } = prepItem(d, eventId, itemId);
+    i.done = !!done; i.updatedAt = now; e.updatedAt = now;
+  });
+}
+
+export function editPrepItem(store, eventId, itemId, title) {
+  return store.update('act.prep', (d, { now }) => {
+    const { e, i } = prepItem(d, eventId, itemId);
+    const text = String(title || '').trim();
+    if (!text) throw appError('err.needItemTitle');
+    i.title = text; i.updatedAt = now; e.updatedAt = now;
+  });
+}
+
+export function deletePrepItem(store, eventId, itemId) {
+  return store.update('act.prep', (d, { now }) => {
+    const { e, i } = prepItem(d, eventId, itemId);
+    i.deletedAt = now; i.updatedAt = now; e.updatedAt = now;
+  });
+}
+
+// ---------- Several items at once (lists, templates) ----------
+
+export function addContainerItems(store, coll, id, text, category = null) {
+  const lines = String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
+  return store.update('act.addItem', (d, ctx) => {
+    if (!lines.length) throw appError('err.needItemTitle');
+    const c = container(d, ctx, coll, id);
+    for (const title of lines) c.items.push(newItem({ id: ctx.uid(), title, category: category || null, now: ctx.now }));
+    c.updatedAt = ctx.now;
+    return lines.length;
+  });
+}
+
+// ---------- «Дом» and «Купить» ----------
+
+// Adds items to the inventory (created on the first use). The same name (ignoring case) is not added twice.
+export function addHomeItems(store, text) {
+  const lines = String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
+  return store.update('act.addHome', (d, { now, uid }) => {
+    if (!lines.length) throw appError('err.needItemTitle');
+    let h = d.lists.find(l => l.kind === 'home' && !l.deletedAt);
+    if (!h) {
+      h = newList({ id: uid(), name: t('lists.home'), now });
+      h.kind = 'home';
+      d.lists.push(h);
+    }
+    const have = new Set(h.items.filter(i => !i.deletedAt).map(i => i.title.toLocaleLowerCase()));
+    let added = 0;
+    for (const title of lines) {
+      if (have.has(title.toLocaleLowerCase())) continue;
+      have.add(title.toLocaleLowerCase());
+      const it = newItem({ id: uid(), title, now });
+      it.stock = 'have';
+      h.items.push(it);
+      added++;
+    }
+    h.updatedAt = now;
+    return added || undefined;
+  });
+}
+
+// One of the three states. «Закончилось» puts the item in «Купить»; «Заканчивается» does not.
+export function setStock(store, itemId, stock) {
+  return store.update('act.stock', (d, { now }) => {
+    if (!STOCK_STATES.includes(stock)) throw appError('err.unknownStock');
+    const h = d.lists.find(l => l.kind === 'home' && !l.deletedAt);
+    if (!h) throw appError('err.notFound', { what: { $t: 'what.list' } });
+    const i = findAlive(h.items, itemId, 'what.item');
+    i.stock = stock; i.updatedAt = now; h.updatedAt = now;
+  });
+}
+
+// Checked off in «Купить»: the same inventory item becomes «Есть». Nothing is deleted or copied.
+export function markBought(store, itemId) {
+  return store.update('act.stock', (d, { now }) => {
+    const h = d.lists.find(l => l.kind === 'home' && !l.deletedAt);
+    if (!h) throw appError('err.notFound', { what: { $t: 'what.list' } });
+    const i = findAlive(h.items, itemId, 'what.item');
+    if (stockOf(i) !== 'out') return;
+    i.stock = 'have'; i.updatedAt = now; h.updatedAt = now;
+  });
+}

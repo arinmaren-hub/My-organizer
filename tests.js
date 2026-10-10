@@ -16,6 +16,7 @@ import { naturalDay, planningDay, dayWindow, suggestCutoff } from './planday.js'
 import { t, msg, m, setLang, getLang, readLanguage, saveLanguage, formatDay, formatDateTime, formatStamp, DICTS, addTexts, has, missing, LANGS } from './i18n.js';
 
 import { registerV4 } from './tests-v4.js';
+import { registerV5 } from './tests-v5.js';
 
 setLang('ru'); // texts below are checked in Russian unless a test says otherwise
 
@@ -830,7 +831,7 @@ test(L, 'ошибки импорта — ключи на обоих языках
 });
 test(L, 'в коде нет русского текста интерфейса вне i18n.js (кроме boot.js)', async () => {
   const sw = await (await fetch('sw.js', { cache: 'no-store' })).text();
-  const files = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"')).filter(f => f.endsWith('.js') && !/i18n\.js|i18n-v4\.js|boot\.js/.test(f));
+  const files = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"')).filter(f => f.endsWith('.js') && !/i18n\.js|i18n-v4\.js|i18n-v5\.js|boot\.js/.test(f));
   const found = [];
   for (const f of files) {
     const code = (await (await fetch(f, { cache: 'no-store' })).text())
@@ -1533,6 +1534,7 @@ test('PWA', 'в коде нет встроенных обработчиков on
 });
 
 registerV4({ test, eq, ok, setup, makeClock, savedDoc, failWrites, healWrites, rollbackCopies, dailyCopies, changeOnDays, titles, A });
+registerV5({ test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopies });
 
 // ================= runner =================
 async function run() {

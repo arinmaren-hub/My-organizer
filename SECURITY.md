@@ -1,4 +1,4 @@
-# SECURITY.md — privacy, data isolation and their limits (version 0.4.0)
+# SECURITY.md — privacy, data isolation and their limits (version 0.5.0)
 
 This file says what the app does to keep each person's data private, what it **cannot** protect against, and how this was tested. It does not claim the app is perfectly secure: every guarantee below comes with its evidence, and every known gap is listed.
 
@@ -45,17 +45,19 @@ Rules that keep these guarantees in future versions: `DECISIONS.md`, sections F 
 
 ---
 
-## 4. Tests performed for 0.4.0 (results: `TESTING.md`)
+## 4. Tests performed for 0.5.0 (results: `TESTING.md`)
 
-All on the files exactly as packed in the 0.4.0 ZIP, in headless Chromium 141 (Playwright 1.56), served over local http.
+All on the final files, in headless Chromium 141 (Playwright 1.56), served over local http. Not tested on Safari/WebKit or a real iPhone.
 
 | Test | What it covers | Result |
 |---|---|---|
-| `tests.html` (unit) | 251 tests, incl. «Приватность» and «Сохранность данных при обновлении»; four time zones | 251 / 251 |
-| `privacy-test.py` | two independent browser contexts (each with tasks, events, projects, lists, waiting items, recurring tasks and templates), logging server, storage surfaces, offline cache, CSP blocking, foreign backup, crafted backup | 38 / 38 checks |
-| `upgrade-test.py` | real service-worker update 0.2.0, 0.2.1, 0.2.2 and 0.3.0 → 0.4.0 with two people side by side | 47 / 47 (0.2.x) and 46 / 46 (0.3.0) |
-| Independent code review | a separate agent reviewed storage, upgrade, import, escaping, recurrence, reviews and date code | no data-loss or privacy defects; wrong-behavior findings fixed (`TESTING.md`) |
-| `e2e-test.py`, `e2e-v4-test.py` | the whole app clicked through, incl. another organizer's backup in a second browser; all 0.4.0 features in both languages | 125 / 125 and 337 / 337 checks |
+| `tests.html` (unit) | 306 tests, incl. «Приватность» and «Сохранность данных при обновлении»; four time zones | 306 / 306 |
+| `privacy-test.py` | two independent browser contexts, logging server, storage surfaces, offline cache, CSP blocking, foreign backup, crafted backup | 38 / 38 checks |
+| `upgrade-test.py` | real service-worker update 0.2.0, 0.2.1, 0.2.2, 0.3.0, 0.4.0 → 0.5.0 with two people side by side | 47 / 47 (0.2.x), 46 / 46 (0.3.0), 45 / 45 (0.4.0) |
+| `e2e-test.py`, `e2e-v5-test.py` | the whole app clicked through in both languages | 125 / 125 and 677 / 677 checks |
+| Independent code review | a separate agent reviewed storage, conversion, Home, lists and the service worker | no data-loss or privacy defects; 3 wrong-behavior findings fixed, 2 limits documented (`TESTING.md`) |
+
+**Service-worker install (0.5.0):** each file is fetched as `file?v=VERSION` (bypassing HTTP cache), fully read, the downloaded `version.js` must contain the expected version, and only then is everything stored. A half-uploaded site or a stale CDN copy therefore cannot produce a mixed offline cache; the install fails and the previous version keeps working. Limit: it does not prove that every other file is the new one (see `TESTING.md`). No network code touches personal data.
 
 How to run them yourself: `TESTING.md`, section 6.
 

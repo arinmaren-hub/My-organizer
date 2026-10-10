@@ -1,12 +1,12 @@
 // "Календарь": month grid (Monday first), 12-month year view, month and year picker,
-// and the day's tasks and events with quick adding. Real calendar dates are shown;
+// and the day's tasks and events as a compact list. Adding is the «＋» button (app.js). Real calendar dates are shown;
 // the personal planning day is only marked.
 
 import { esc } from './util.js';
 import { dateKey, addDays, isoWeekday } from './dates.js';
-import { t, formatDay, monthName, monthShort, weekdayShort, weekdayLong } from './i18n.js';
+import { t, dayLong, monthName, monthShort, weekdayShort, weekdayLong } from './i18n.js';
 import { monthGrid, shiftMonth, summarizeRange, dayContents, firstOfMonth } from './calendar.js';
-import { taskRow, eventRow, empty } from './components.js';
+import { taskRow, eventRow, empty, foldBlock } from './components.js';
 
 const WEEKDAY_ROW = () => Array.from({ length: 7 }, (_, i) => `<div class="wd" aria-hidden="true">${esc(weekdayShort(i))}</div>`).join('');
 
@@ -74,24 +74,16 @@ function dayPanel(doc, cal, ctx) {
   if (d === ctx.calendarToday) tags.push(t('cal.isToday'));
   if (d === ctx.today) tags.push(t('cal.isPlanning'));
   const wd = weekdayLong(isoWeekday(d) - 1);
-  let body = '';
-  if (c.events.length) body += `<h3>${esc(t('cal.events2'))}</h3>${c.events.map(e => eventRow(e, e.start.slice(11))).join('')}`;
-  if (c.tasks.length) body += `<h3>${esc(t('cal.tasks'))}</h3>${c.tasks.map(x => taskRow(x, { withMove: true })).join('')}`;
-  if (c.deadlines.length) body += `<h3>${esc(t('cal.deadlines'))}</h3>${c.deadlines.map(x => taskRow(x, { withMove: true })).join('')}`;
-  if (c.repeats.length) body += `<h3>${esc(t('cal.repeats'))}</h3>${c.repeats.map(r => `<div class="row"><div class="grow">↻ ${esc(r.title)}</div></div>`).join('')}`;
+  const main = c.events.map(e => eventRow(e, e.start.slice(11))).join('') + c.tasks.map(x => taskRow(x)).join('');
+  let body = main ? `<div class="list">${main}</div>` : '';
+  if (c.deadlines.length) body += `<h3 class="sub">${esc(t('cal.deadlines'))}</h3>${c.deadlines.map(x => taskRow(x, { swipe: false })).join('')}`;
+  if (c.repeats.length) body += `<h3 class="sub">${esc(t('cal.repeats'))}</h3>${c.repeats.map(r => `<div class="row"><div class="grow">↻ ${esc(r.title)}</div></div>`).join('')}`;
   if (!body) body = empty(t('cal.noItems'));
-  const week = c.weekTasks.length ? `<details><summary>${esc(t('cal.weekTasks', { n: c.weekTasks.length }))}</summary>${c.weekTasks.map(x => taskRow(x, { withMove: true })).join('')}</details>` : '';
-  return `<section class="card" id="day-panel">
-    <h2>${esc(wd)}, ${esc(formatDay(d))}</h2>
+  const week = c.weekTasks.length ? foldBlock('calweek', t('cal.weekTasks', { n: c.weekTasks.length }), c.weekTasks.map(x => taskRow(x)).join('')) : '';
+  return `<section id="day-panel">
+    <h2 class="daytitle">${esc(wd)}, ${esc(dayLong(d))}</h2>
     ${tags.length ? `<p class="muted small">${esc(tags.join(' · '))}</p>` : ''}
     ${body}${week}
-    <h3>${esc(t('cal.addTo', { day: { $day: d } }))}</h3>
-    <form data-form="cal.add" data-date="${d}" autocomplete="off">
-      <div class="line"><input name="title" required placeholder="${esc(t('cal.addTitlePh'))}" class="grow" aria-label="${esc(t('cal.addTitlePh'))}">
-        <input type="time" name="time" aria-label="${esc(t('cal.addTime'))}" title="${esc(t('cal.addTime'))}"></div>
-      <div class="line"><button type="submit" name="as" value="task" class="primary">${esc(t('cal.asTask'))}</button>
-        <button type="submit" name="as" value="event">${esc(t('cal.asEvent'))}</button></div>
-    </form>
   </section>`;
 }
 

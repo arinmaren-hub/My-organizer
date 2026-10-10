@@ -1,4 +1,4 @@
-"""Click-through test of the organizer in headless Chromium (iPhone-sized screen).
+"""Click-through test (0.5.0 UI) of the organizer in headless Chromium (iPhone-sized screen).
 Requires: Python 3, Playwright (pip install playwright && playwright install chromium).
 Usage: python3 e2e-test.py <app_folder> <output_folder>
 The app folder is copied into the output folder first, so it is never modified.
@@ -72,14 +72,14 @@ with sync_playwright() as p:
     def skip_onboarding(q):
         q.wait_for_selector('[data-action="onboarding.skip"]', timeout=5000)
         q.click('[data-action="onboarding.skip"]')
-        q.wait_for_selector('nav button', timeout=5000)
+        q.wait_for_selector('nav#nav button', timeout=5000)
     def seed(q, data, extra=None):
         q.goto(BASE + 'tests.css')
         q.evaluate("d => localStorage.setItem('organizer:data', JSON.stringify(d))", data)
         for k, v in (extra or {}).items():
             q.evaluate("([k, v]) => localStorage.setItem(k, v)", [k, v])
         q.goto(BASE)
-        q.wait_for_function('window.__organizerReady === true')
+        q.wait_for_function('() => window.__organizerReady === true')
     ATHENS = datetime.timezone(datetime.timedelta(hours=3))
     NOWISO = '2026-10-01T10:00:00.000Z'
     def task(i, title, kind, date=None, **kw):
@@ -94,13 +94,27 @@ with sync_playwright() as p:
 
     doc = lambda: pg.evaluate("JSON.parse(localStorage.getItem('organizer:data') || 'null')")
     main_text = lambda: pg.inner_text('main')
-    def tab(name):
-        pg.click(f'nav button:text-is("{name}")')
+    NAV = {'Сегодня': 'today', 'Календарь': 'calendar', 'Задачи': 'tasks', 'Списки': 'lists', 'Today': 'today', 'Calendar': 'calendar', 'Tasks': 'tasks', 'Lists': 'lists'}
+    SUB = {'Данные': 'data', 'Data': 'data', 'Прогресс': 'projects', 'Progress': 'projects', 'Настройки': 'settings', 'Settings': 'settings'}
+    def sub(q, name):
+        if not q.locator('#more-btn').is_visible(): q.click('nav#nav [data-tab="today"]'); q.wait_for_timeout(40)
+        q.click('#more-btn'); q.wait_for_selector('#sheet-root .sheet'); q.wait_for_timeout(260)
+        q.click(f'#sheet-root [data-action="go"][data-tab="{name}"]'); q.wait_for_timeout(60)
+    def settings(q): sub(q, 'settings')
+    def tab(name, q=None):
+        q = q or pg
+        if name in NAV: q.click(f'nav [data-tab="{NAV[name]}"]'); q.wait_for_timeout(40)
+        else: sub(q, SUB[name])
+    def add_text(q, text):
+        q.click('#fab'); q.wait_for_selector('#sheet-root textarea[name=text]'); q.wait_for_timeout(260)
+        q.fill('#sheet-root textarea[name=text]', text)
+        q.click('#sheet-root form[data-form="task.quickAdd"] button[type=submit]'); q.wait_for_timeout(60)
+    def no_sheet(q): return q.locator('#sheet-root .sheet').count() == 0
     def today_key():
         return pg.evaluate("(() => { const d = new Date(); const p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; })()")
 
     pg.goto(BASE)
-    pg.wait_for_function('window.__organizerReady === true', timeout=10000)
+    pg.wait_for_function('() => window.__organizerReady === true', timeout=10000)
     TODAY = today_key()
 
     @step('Первый запуск')
@@ -110,39 +124,39 @@ with sync_playwright() as p:
         check('Первый запуск: поля «встаю», «ложусь», «день заканчивается»', all(pg.locator(f'form[data-form="onboarding.save"] input[name={n}]').count() == 1 for n in ('wake', 'bed', 'cutoff')))
         check('Первый запуск: ничего не записано до ответа', doc() is None)
         pg.click('[data-action="onboarding.skip"]')
-        pg.wait_for_selector('nav button')
+        pg.wait_for_selector('nav#nav button')
         d = doc()
         check('Пропуск: день заканчивается в 00:00, вопросы больше не показываются', d and d['settings']['day'] == {'wake': None, 'bed': None, 'cutoff': '00:00', 'setupDone': True}, str(d and d['settings']))
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         check('Пропуск: после перезапуска сразу «Сегодня»', pg.locator('form[data-form="onboarding.save"]').count() == 0)
+
 
     @step('Запуск')
     def _():
-        check('Запуск: экран «Сегодня» открывается', 'Быстро добавить' in main_text())
-        check('Запуск: 6 вкладок', pg.locator('nav button').count() == 6)
+        check('Запуск: экран «Сегодня» открывается (день недели и дата вверху, без «Быстро добавить»)', pg.inner_text('#app-title') != '' and 'Быстро добавить' not in main_text())
+        check('Запуск: 4 вкладки внизу', pg.locator('nav#nav button').count() == 4)
         check('Запуск: нет горизонтальной прокрутки на ширине iPhone (390px)', pg.evaluate('document.documentElement.scrollWidth') <= 390)
 
     @step('Быстрое добавление')
     def _():
-        pg.fill('form[data-form="task.quickAdd"] textarea', 'Купить хлеб\nПозвонить маме\n')
-        pg.click('form[data-form="task.quickAdd"] button[type=submit]')
+        add_text(pg, 'Купить хлеб\nПозвонить маме\n')
         d = doc()
-        check('Быстрое добавление: 2 строки → 2 задачи «Без даты»', d and [t['title'] for t in d['tasks']] == ['Купить хлеб', 'Позвонить маме'] and all(t['plan']['kind'] == 'none' for t in d['tasks']))
-        check('Быстрое добавление: поле очищено после добавления', pg.input_value('form[data-form="task.quickAdd"] textarea') == '')
-        pg.select_option('form[data-form="task.quickAdd"] select', 'day')
-        check('Быстрое добавление: поле даты появляется для «На день»', pg.is_visible('form[data-form="task.quickAdd"] input[name=date]'))
-        pg.fill('form[data-form="task.quickAdd"] textarea', 'Сдать эссе')
-        pg.click('form[data-form="task.quickAdd"] button[type=submit]')
-        check('Быстрое добавление: задача на сегодня видна в «Сегодня»', 'Сдать эссе' in pg.inner_text('main section:has(h2:text-matches("^Сегодня"))'))
+        check('Быстрое добавление: 2 строки → 2 задачи на сегодня', d and [t['title'] for t in d['tasks']] == ['Купить хлеб', 'Позвонить маме'] and all(t['plan'] == {'kind': 'day', 'date': TODAY} for t in d['tasks']), str(d and [t['plan'] for t in d['tasks']]))
+        check('Быстрое добавление: лист закрыт, задачи на экране', no_sheet(pg) and 'Купить хлеб' in main_text())
+        add_text(pg, 'Сдать эссе')
+        check('Быстрое добавление: ещё задача на «Сегодня»', 'Сдать эссе' in pg.inner_text('#today-list'))
 
     @step('Черновик быстрого ввода')
     def _():
-        pg.fill('form[data-form="task.quickAdd"] textarea', 'недописанная задача')
+        pg.click('#fab'); pg.wait_for_selector('#sheet-root textarea'); pg.wait_for_timeout(260)
+        pg.fill('#sheet-root textarea', 'недописанная задача')
+        pg.keyboard.press('Escape')
+        pg.click('#fab'); pg.wait_for_selector('#sheet-root textarea'); pg.wait_for_timeout(260)
+        check('Черновик быстрого ввода не теряется при закрытии листа', pg.input_value('#sheet-root textarea') == 'недописанная задача')
+        pg.fill('#sheet-root textarea', '')
+        pg.keyboard.press('Escape')
         pg.locator('.row:has-text("Сдать эссе") input[type=checkbox]').check()
-        check('Черновик быстрого ввода не теряется при отметке задачи', pg.input_value('form[data-form="task.quickAdd"] textarea') == 'недописанная задача')
-        pg.fill('form[data-form="task.quickAdd"] textarea', '')
-        pg.dispatch_event('form[data-form="task.quickAdd"] textarea', 'input')
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         check('Отметка «готово» сохраняется после перезагрузки', pg.locator('.row:has-text("Сдать эссе") input[type=checkbox]').is_checked())
         t = [t for t in doc()['tasks'] if t['title'] == 'Сдать эссе'][0]
         check('Отметка «готово» записывает completedAt', t['done'] and t['completedAt'])
@@ -150,21 +164,22 @@ with sync_playwright() as p:
     @step('Календарь')
     def _():
         tab('Календарь')
-        pg.fill('form[data-form="cal.add"] input[name=title]', 'Лекция AN1000')
-        pg.fill('form[data-form="cal.add"] input[name=time]', '10:00')
-        pg.click('form[data-form="cal.add"] button[value=event]')
-        check('Календарь: событие создаётся (ошибка 1 исправлена)', 'Лекция AN1000' in main_text() and len(doc()['events']) == 1)
+        add_text(pg, 'Лекция AN1000 в 10:00')
+        pg.click('[data-action="quick.asEvent"]')
+        check('Календарь: событие создаётся через «＋» (ошибка 1 исправлена)', 'Лекция AN1000' in main_text() and len(doc()['events']) == 1, main_text()[:100])
         tab('Сегодня')
-        check('Календарь: событие в «Расписании» на сегодня', '10:00 · Лекция AN1000' in main_text())
+        check('Календарь: событие в расписании на сегодня', '10:00' in pg.inner_text('#today-list') and 'Лекция AN1000' in pg.inner_text('#today-list'))
 
     @step('Прогресс')
     def _():
-        tab('Прогресс')
-        pg.fill('form[data-form="project.add"] input[name=name]', 'Диплом')
-        pg.fill('form[data-form="project.add"] input[name=total]', '12')
-        pg.fill('form[data-form="project.add"] input[name=unit]', 'глав')
-        pg.click('form[data-form="project.add"] button[type=submit]')
-        check('Прогресс: проект создаётся (ошибка 1 исправлена)', 'Диплом' in main_text())
+        d = doc()
+        d['projects'].append({"id": "pr1", "name": "Диплом", "milestones": [], "quantity": {"current": 0, "total": 12, "unit": "глав"}, "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None})
+        pg.evaluate("d => localStorage.setItem('organizer:data', JSON.stringify(d))", d)
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
+        pg.click('#more-btn'); pg.wait_for_selector('#sheet-root .sheet'); pg.wait_for_timeout(260)
+        check('Прогресс скрыт из вкладок, но доступен из «···», когда проекты есть', pg.locator('nav#nav [data-tab="projects"]').count() == 0 and pg.locator('#sheet-root [data-tab="projects"]').count() == 1)
+        pg.click('#sheet-root [data-tab="projects"]')
+        check('Прогресс: проект с данными на месте', 'Диплом' in main_text())
         for name in ['План', 'Глава 1']:
             pg.fill('form[data-form="milestone.add"] input[name=title]', name)
             pg.press('form[data-form="milestone.add"] input[name=title]', 'Enter')
@@ -183,30 +198,32 @@ with sync_playwright() as p:
     @step('Списки')
     def _():
         tab('Списки')
-        pg.fill('form[data-form="list.add"] input[name=name]', 'Покупки')
-        pg.click('form[data-form="list.add"] button[type=submit]')
-        check('Списки: список создаётся (ошибка 1 исправлена)', 'Покупки' in main_text())
+        pg.click('#fab'); pg.wait_for_selector('#sheet-root form[data-form="list.add"]'); pg.wait_for_timeout(260)
+        pg.fill('#sheet-root form[data-form="list.add"] input[name=name]', 'Покупки')
+        pg.click('#sheet-root form[data-form="list.add"] button[type=submit]'); pg.wait_for_timeout(150)
+        check('Списки: список создаётся и открывается (ошибка 1 исправлена)', pg.inner_text('#app-title') == 'Покупки', pg.inner_text('#app-title'))
         for name in ['Молоко', 'Хлеб']:
-            pg.fill('form[data-form="item.add"] input[name=title]', name)
-            pg.press('form[data-form="item.add"] input[name=title]', 'Enter')
+            pg.click('#fab'); pg.wait_for_selector('#sheet-root textarea'); pg.wait_for_timeout(260)
+            pg.fill('#sheet-root textarea', name); pg.click('#sheet-root form button[type=submit]')
         pg.locator('.row:has-text("Молоко") input[type=checkbox]').check()
         check('Списки: пункты добавляются и отмечаются', pg.locator('.row.is-done:has-text("Молоко")').count() == 1 and 'Хлеб' in main_text())
 
     @step('Фоновая перерисовка')
     def _():
-        pg.fill('form[data-form="item.add"] input[name=title]', 'Печен')
+        pg.click('#fab'); pg.wait_for_selector('#sheet-root textarea'); pg.wait_for_timeout(260)
+        pg.fill('#sheet-root textarea', 'Печен')
         pg.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'organizer:appearance' }))")
-        st = pg.evaluate("(() => { const el = document.activeElement; return { name: el && el.name, form: el && el.form && el.form.dataset.form, value: el && el.value }; })()")
-        check('Фоновая перерисовка не сбивает ввод: фокус и набранный текст на месте', st == {'name': 'title', 'form': 'item.add', 'value': 'Печен'}, str(st))
+        st = pg.evaluate("(() => { const el = document.activeElement; return { name: el && el.name, value: el && el.value }; })()")
+        check('Фоновая перерисовка не сбивает ввод: фокус и набранный текст на месте', st == {'name': 'text', 'value': 'Печен'}, str(st))
         pg.keyboard.type('ье')
-        pg.keyboard.press('Enter')
-        check('Фоновая перерисовка: после продолжения ввода пункт добавляется целиком, поле очищается',
-              'Печенье' in main_text() and pg.input_value('form[data-form="item.add"] input[name=title]') == '')
+        pg.click('#sheet-root form button[type=submit]')
+        check('Фоновая перерисовка: после продолжения ввода пункт добавляется целиком', 'Печенье' in main_text())
 
     @step('Удаление и восстановление')
     def _():
         tab('Задачи')
-        pg.click('.row:has-text("Купить хлеб") button[data-action="task.delete"]')
+        pg.locator('.row:has-text("Купить хлеб") .more').click(); pg.wait_for_selector('#sheet-root .sheet'); pg.wait_for_timeout(260)
+        pg.click('#sheet-root [data-action="task.delete"]')
         check('Удаление: задача скрыта', 'Купить хлеб' not in main_text())
         t = [t for t in doc()['tasks'] if t['title'] == 'Купить хлеб'][0]
         check('Удаление: запись не стёрта, а помечена deletedAt', t['deletedAt'] is not None)
@@ -225,23 +242,24 @@ with sync_playwright() as p:
                            "deadline": "2026-12-01", "projectId": None, "done": False, "completedAt": None,
                            "createdAt": "2026-10-01T10:00:00.000Z", "updatedAt": "2026-10-01T10:00:00.000Z", "deletedAt": None})
         pg.evaluate("d => localStorage.setItem('organizer:data', JSON.stringify(d))", d)
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
-        check('Разбор: просроченная дневная задача показана', 'Утренний разбор · 1' in main_text())
-        check('Разбор: дедлайн виден в строке задачи', 'дедлайн' in pg.inner_text('section.review'))
-        pg.click('section.review button[data-action="review"][data-choice="today"]')
-        check('Разбор: «Сегодня» переносит задачу и разбор исчезает', 'Утренний разбор' not in main_text() and 'Просроченная' in pg.inner_text('main section:has(h2:text-matches("^Сегодня"))'))
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
+        check('Хвосты: просроченная дневная задача посчитана', pg.locator('[data-fold="tails"] .count').inner_text() == '1')
+        pg.click('[data-fold="tails"] .foldhead')
+        check('Хвосты: дедлайн виден в строке задачи', 'дедлайн' in pg.inner_text('[data-fold="tails"]'))
+        pg.click('[data-fold="tails"] button[data-action="review"][data-choice="today"]')
+        check('Хвосты: «Сегодня» переносит задачу, хвостов не остаётся', pg.locator('[data-fold="tails"]').count() == 0 and 'Просроченная' in pg.inner_text('#today-list'))
         t = [t for t in doc()['tasks'] if t['id'] == 'overdue1'][0]
-        check('Разбор: перенос не меняет дедлайн (решение 6)', t['deadline'] == '2026-12-01' and t['plan'] == {'kind': 'day', 'date': TODAY})
+        check('Хвосты: перенос не меняет дедлайн (решение 6)', t['deadline'] == '2026-12-01' and t['plan'] == {'kind': 'day', 'date': TODAY})
+
+    backup_path = os.path.join(OUT, 'backup.json')
 
     @step('Защита от внедрения')
     def _():
         tab('Сегодня')
-        pg.fill('form[data-form="task.quickAdd"] textarea', '<img src=x onerror="alert(1)">')
-        pg.click('form[data-form="task.quickAdd"] button[type=submit]')
+        add_text(pg, '<img src=x onerror="alert(1)">')
         tab('Задачи')
         check('Название с HTML показывается как текст, а не выполняется', '<img src=x' in main_text() and pg.locator('main img').count() == 0 and not any(m == '1' for m in dialogs))
 
-    backup_path = os.path.join(OUT, 'backup.json')
     @step('Экспорт')
     def _():
         tab('Данные')
@@ -257,6 +275,7 @@ with sync_playwright() as p:
         pg.click('button[data-action="backup.toggleText"]')
         check('Экспорт: запасной способ — текст копии показан', pg.locator('textarea.json').count() == 1 and '"kind": "backup"' in pg.input_value('textarea.json'))
 
+
     @step('Импорт')
     def _():
         data = json.load(open(backup_path, encoding='utf-8'))
@@ -271,6 +290,7 @@ with sync_playwright() as p:
         pg.click('button[data-action="import.apply"]')
         check('Импорт: данные заменены', len(doc()['tasks']) == n_before + 1)
         check('Импорт: автокопия «перед импортом» создана', 'перед импортом' in main_text())
+
 
     @step('Импорт и восстановление при сбое записи')
     def _():
@@ -293,7 +313,7 @@ with sync_playwright() as p:
               'Импорт не выполнен' in pg.inner_text('#banners') and 'Импорт выполнен' not in pg.inner_text('#banners') and 'не удалось сохранить' in main_text())
         check('Сбой записи при импорте: предпросмотр остаётся, можно повторить', pg.locator('button[data-action="import.apply"]').count() == 1)
         check('Сбой записи при импорте: сохранённые данные не изменились', pg.evaluate("localStorage.getItem('organizer:data')") == disk_before)
-        check('Сбой записи при импорте: нет ложного «⚠ Не сохранено»', 'Не сохранено' not in pg.inner_text('#status'))
+        check('Сбой записи при импорте: нет ложного «⚠ Не сохранено»', pg.locator('[data-action="save.retry"]').count() == 0)
         tab('Задачи')
         check('Сбой записи при импорте: на экране прежние данные', 'Не должна появиться' not in main_text())
         tab('Данные')
@@ -307,6 +327,7 @@ with sync_playwright() as p:
         pg.click('button[data-action="import.apply"]')
         check('После освобождения места импорт проходит и сохраняется',
               'Импорт выполнен' in pg.inner_text('#banners') and any(t['title'] == 'Не должна появиться' for t in doc()['tasks']))
+
 
     @step('Импорт неверных данных')
     def _():
@@ -323,16 +344,17 @@ with sync_playwright() as p:
         pg.wait_for_selector('button[data-action="import.apply"]', timeout=5000)
         check('Импорт: файл с плохой записью — предупреждение о карантине', 'попадут в карантин' in main_text())
         pg.click('button[data-action="import.apply"]')
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         tab('Данные')
         check('Ошибка 2 исправлена: после импорта плохой записи приложение работает после перезагрузки', 'Карантин · 1' in main_text())
         tab('Задачи')
         check('Импорт: хорошие записи из того же файла загружены', 'Задача из прототипа' in main_text())
 
+
     @step('Повреждённые данные')
     def _():
         pg.evaluate("localStorage.setItem('organizer:data', '{broken json')")
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         check('Ошибка 3 исправлена: предупреждение о повреждённых данных', 'Основные данные не читаются' in pg.inner_text('#banners'))
         rescue = pg.evaluate("JSON.parse(localStorage.getItem('organizer:rescue'))")
         check('Ошибка 3: исходный текст сохранён без изменений', rescue and rescue[0]['raw'] == '{broken json')
@@ -366,6 +388,7 @@ with sync_playwright() as p:
       return issues;
     }"""
 
+
     @step('Оформление')
     def _():
         d = doc()
@@ -374,14 +397,14 @@ with sync_playwright() as p:
                            "deadline": None, "projectId": None, "done": False, "completedAt": None,
                            "createdAt": "2026-10-01T10:00:00.000Z", "updatedAt": "2026-10-01T10:00:00.000Z", "deletedAt": None})
         pg.evaluate("d => localStorage.setItem('organizer:data', JSON.stringify(d))", d)
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         keys_before = pg.evaluate("['organizer:data','organizer:snapshots','organizer:rollback','organizer:device'].map(k => localStorage.getItem(k))")
-        pg.click('#settings-btn')
+        settings(pg)
         check('Настройки: открываются кнопкой в шапке, три варианта оформления', 'Оформление' in main_text() and pg.locator('button[data-action="appearance.set"]').count() == 3)
         check('Настройки: по умолчанию «Как в системе»', pg.inner_text('button.choice.active[data-action="appearance.set"]').startswith('Как в системе'))
         for mode, scheme in (('light', 'dark'), ('dark', 'light'), ('system', 'dark'), ('system', 'light')):
             pg.emulate_media(color_scheme=scheme)
-            pg.click('#settings-btn')
+            settings(pg)
             pg.click(f'button[data-action="appearance.set"][data-mode="{mode}"]')
             dark = mode == 'dark' or (mode == 'system' and scheme == 'dark')
             label = f'«{mode}» при системной теме {scheme}'
@@ -389,7 +412,7 @@ with sync_playwright() as p:
             check(f'Оформление {label}: фон {"тёмный" if dark else "светлый тёплый"}', bg == ('rgb(27, 26, 24)' if dark else 'rgb(242, 238, 230)'), bg)
             check(f'Оформление {label}: поля даты, списки и флажки в той же схеме', pg.evaluate("getComputedStyle(document.documentElement).colorScheme") == ('dark' if dark else 'light'))
             issues = []
-            for name in ['Сегодня', 'Календарь', 'Задачи', 'Прогресс', 'Списки', 'Данные']:
+            for name in ['Сегодня', 'Календарь', 'Задачи', 'Списки', 'Прогресс', 'Данные']:
                 tab(name)
                 if name == 'Данные':
                     pg.click('button[data-action="backup.toggleText"]')
@@ -402,7 +425,7 @@ with sync_playwright() as p:
                     pg.click('button[data-action="backup.toggleText"]')
                 if mode != 'system' and name in ('Сегодня', 'Данные', 'Прогресс'):
                     pg.screenshot(path=os.path.join(OUT, f'theme-{mode}-{name}.png'), full_page=True)
-            pg.click('#settings-btn')
+            settings(pg)
             issues += [f'Настройки: {i}' for i in pg.evaluate(AUDIT_JS)]
             # every message style (info / warning / error banners, backup note, error in a card)
             pg.evaluate("""() => { document.getElementById('banners').innerHTML =
@@ -422,25 +445,26 @@ with sync_playwright() as p:
         check('«Как в системе»: смена темы iPhone применяется сразу, без перезапуска', pg.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(242, 238, 230)')
         pg.click('button[data-action="appearance.set"][data-mode="dark"]')
         check('Тёмное: цвет строки состояния тоже тёмный', pg.evaluate("[...document.querySelectorAll('meta[name=theme-color]')].map(m => m.content)") == ['#1b1a18', '#1b1a18'])
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         check('Выбор сохраняется после перезапуска', pg.evaluate("document.documentElement.dataset.theme") == 'dark' and pg.evaluate("localStorage.getItem('organizer:appearance')") == 'dark')
-        pg.click('#settings-btn')
+        settings(pg)
         check('После перезапуска в настройках отмечено «Тёмное»', pg.inner_text('button.choice.active[data-action="appearance.set"]').startswith('Тёмное'))
         keys_after = pg.evaluate("['organizer:data','organizer:snapshots','organizer:rollback','organizer:device'].map(k => localStorage.getItem(k))")
         check('Смена оформления не изменила данные, автокопии и сведения устройства', keys_before == keys_after)
         pg.click('button[data-action="appearance.set"][data-mode="system"]')
         pg.emulate_media(color_scheme='light')
 
+
     @step('Язык интерфейса')
     def _():
         keys_before = pg.evaluate("['organizer:data','organizer:snapshots','organizer:rollback','organizer:device'].map(k => localStorage.getItem(k))")
         pg.evaluate("window.__i18nMissing.clear()")
-        pg.click('#settings-btn')
+        settings(pg)
         pg.click('button[data-action="language.set"][data-mode="en"]')
         check('English: header, tabs and page language switch at once',
-              pg.inner_text('#app-title') == 'My Organizer' and pg.inner_text('nav') .split('\n')[0].strip() == 'Today' and pg.evaluate('document.documentElement.lang') == 'en')
+              pg.inner_text('nav#nav').split('\n')[0].strip() == 'Today' and pg.evaluate('document.documentElement.lang') == 'en')
         texts = []
-        for name in ['Today', 'Calendar', 'Tasks', 'Progress', 'Lists', 'Data']:
+        for name in ['Today', 'Calendar', 'Tasks', 'Lists', 'Progress', 'Data']:
             tab(name)
             if name == 'Data':
                 pg.click('button[data-action="backup.toggleText"]')
@@ -450,48 +474,49 @@ with sync_playwright() as p:
             if name == 'Data':
                 pg.click('button[data-action="import.cancel"]')
                 pg.click('button[data-action="backup.toggleText"]')
-        pg.click('#settings-btn')
+        settings(pg)
         texts.append(main_text())
         missing = pg.evaluate("[...window.__i18nMissing]")
         check('English: every screen has a translation for every text (no missing keys)', not missing, str(missing[:5]))
-        check('English: dates and labels are English', 'Quick add' in texts[0] and 'Automatic copies' in texts[5] and 'My day' in texts[6], texts[0][:80])
-        UI_RU = ['Сегодня', 'Календарь', 'Задачи', 'Данные', 'Сохранить', 'Удалить', 'Без даты', 'Автокопии', 'пт,', 'окт']
+        check('English: dates and labels are English', 'Waiting for others' in texts[0] and 'Automatic copies' in texts[5] and 'My day' in texts[6], texts[0][:80])
+        UI_RU = ['Календарь', 'Задачи', 'Данные', 'Сохранить', 'Удалить', 'Без даты', 'Автокопии', 'Ожидаю', 'окт']
         leaks = [w for w in UI_RU if any(w in t for t in texts)]
         check('English: no Russian interface words left (user data stays as typed)', not leaks, str(leaks))
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
-        check('English: the choice is kept after restart', pg.inner_text('#app-title') == 'My Organizer' and pg.evaluate("localStorage.getItem('organizer:language')") == 'en')
-        pg.click('#settings-btn')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
+        check('English: the choice is kept after restart', pg.evaluate("localStorage.getItem('organizer:language')") == 'en' and pg.inner_text('nav#nav').split('\n')[0].strip() == 'Today')
+        settings(pg)
         pg.click('button[data-action="language.set"][data-mode="ru"]')
-        check('Русский возвращается одним нажатием', pg.inner_text('#app-title') == 'Мой органайзер' and pg.evaluate('document.documentElement.lang') == 'ru')
+        check('Русский возвращается одним нажатием', pg.inner_text('nav#nav').split('\n')[0].strip() == 'Сегодня' and pg.evaluate('document.documentElement.lang') == 'ru')
         keys_after = pg.evaluate("['organizer:data','organizer:snapshots','organizer:rollback','organizer:device'].map(k => localStorage.getItem(k))")
         check('Смена языка не изменила данные, автокопии и сведения устройства', keys_before == keys_after)
+
 
     @step('Ошибка сохранения')
     def _():
         pg.evaluate("""() => { const orig = Storage.prototype.setItem; window.__failSave = true;
           Storage.prototype.setItem = function (k, v) { if (window.__failSave && k === 'organizer:data') { const e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; } return orig.call(this, k, v); }; }""")
         tab('Сегодня')
-        pg.fill('form[data-form="task.quickAdd"] textarea', 'Не сохранится сразу')
-        pg.click('form[data-form="task.quickAdd"] button[type=submit]')
-        check('Ошибка 5 исправлена: видно предупреждение о несохранении', 'Не удалось сохранить' in pg.inner_text('#banners') and 'Не сохранено' in pg.inner_text('#status'))
+        add_text(pg, 'Не сохранится сразу')
+        check('Ошибка 5 исправлена: видно предупреждение о несохранении', 'Не удалось сохранить' in pg.inner_text('#banners') and pg.locator('[data-action="save.retry"]').count() == 1)
         pg.evaluate("window.__failSave = false")
         pg.click('#banners button[data-action="save.retry"]')
         check('Ошибка 5: «Повторить» сохраняет и убирает предупреждение', 'Не удалось сохранить' not in pg.inner_text('#banners'))
         check('Ошибка 5: задача действительно записана', any(t['title'] == 'Не сохранится сразу' for t in doc()['tasks']))
 
+
     @step('Офлайн')
     def _():
         pg.evaluate('navigator.serviceWorker.ready')
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true')
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true')
         check('Офлайн: service worker управляет страницей', pg.evaluate('!!navigator.serviceWorker.controller'))
         ctx.set_offline(True)
-        pg.reload(); pg.wait_for_function('window.__organizerReady === true', timeout=10000)
+        pg.reload(); pg.wait_for_function('() => window.__organizerReady === true', timeout=10000)
         tab('Сегодня')
-        pg.fill('form[data-form="task.quickAdd"] textarea', 'Офлайн-задача')
-        pg.click('form[data-form="task.quickAdd"] button[type=submit]')
+        add_text(pg, 'Офлайн-задача')
         tab('Задачи')
         check('Офлайн: приложение открывается и работает без сети', 'Офлайн-задача' in main_text())
         ctx.set_offline(False)
+
 
     @step('Обновление версии')
     def _():
@@ -508,28 +533,34 @@ with sync_playwright() as p:
         check('Обновление: появляется «Доступна новая версия»', True)
         with pg.expect_navigation():
             pg.click('#banners button[data-action="update.apply"]')
-        pg.wait_for_function('window.__organizerReady === true')
+        pg.wait_for_function('() => window.__organizerReady === true')
         tab('Данные')
         check('Обновление: после «Обновить» работает новая версия', f'Версия {NEW_VERSION}' in main_text())
         check('Обновление: данные сохранились', len(doc()['tasks']) == n_tasks)
+
 
     @step('Тесты tests.html')
     def _():
         t = ctx.new_page()
         t.goto(BASE + 'tests.html')
-        t.wait_for_function('window.__testResults && window.__testResults.done', timeout=30000)
+        t.wait_for_function('() => window.__testResults && window.__testResults.done', timeout=30000)
         r = t.evaluate('window.__testResults')
         check(f"tests.html на опубликованном сайте: {r['passed']}/{r['total']} пройдено", r['passed'] == r['total'],
               '; '.join(f['name'] + ': ' + f['error'] for f in r['failures']))
         t.close()
 
+
     pg.screenshot(path=os.path.join(OUT, 'screen-data.png'), full_page=True)
     tab('Сегодня')
+
     pg.screenshot(path=os.path.join(OUT, 'screen-today.png'), full_page=True)
     tab('Прогресс')
+
     pg.screenshot(path=os.path.join(OUT, 'screen-progress.png'), full_page=True)
 
+
     # ---- fresh context: migration of prototype data left under the old key ----
+
     @step('Перенос данных прототипа')
     def _():
         c2 = browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id='Europe/Athens')
@@ -537,25 +568,29 @@ with sync_playwright() as p:
         p2.goto(BASE + 'tests.css')
         p2.evaluate("d => localStorage.setItem('arina-organizer-v1', JSON.stringify(d))", PROTOTYPE)
         p2.goto(BASE)
-        p2.wait_for_function('window.__organizerReady === true')
+        p2.wait_for_function('() => window.__organizerReady === true')
         check('Перенос: сообщение о переносе данных прототипа', 'Перенесены данные прототипа' in p2.inner_text('#banners'))
         skip_onboarding(p2)
-        p2.click('nav button:text-is("Задачи")')
+        tab('Задачи', p2)
         check('Перенос: задачи прототипа на месте', 'Задача из прототипа' in p2.inner_text('main'))
         check('Перенос: старый ключ не изменён', p2.evaluate("localStorage.getItem('arina-organizer-v1')") == json.dumps(PROTOTYPE, ensure_ascii=False, separators=(',', ':')) or json.loads(p2.evaluate("localStorage.getItem('arina-organizer-v1')")) == PROTOTYPE)
         c2.close()
 
+
     # ---- iPhone Safari (not installed): warning about separate storage ----
+
     @step('Подсказка для Safari на iPhone')
     def _():
         c4 = browser.new_context(**p.devices['iPhone 13'])
         p4 = c4.new_page()
         p4.goto(BASE)
-        p4.wait_for_function('window.__organizerReady === true')
+        p4.wait_for_function('() => window.__organizerReady === true')
         check('Safari на iPhone (не установлено): предупреждение о раздельных данных', 'раздельные данные' in p4.inner_text('#banners'))
         c4.close()
 
+
     # ---- the saved theme applies before the app code runs (no flash) ----
+
     @step('Оформление без мигания')
     def _():
         c5 = browser.new_context(viewport={'width': 390, 'height': 844}, color_scheme='light')
@@ -569,42 +604,48 @@ with sync_playwright() as p:
               p5.evaluate("document.documentElement.dataset.theme") == 'dark' and p5.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(27, 26, 24)')
         c5.close()
 
+
     # ---- fresh context with a fake clock: "today" rolls over at midnight ----
+
     @step('Смена дня')
     def _():
         c3 = browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id='Europe/Athens')
         p3 = c3.new_page()
         p3.clock.install(time=datetime.datetime(2026, 10, 9, 23, 59, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=3))))
         p3.goto(BASE)
-        p3.wait_for_function('window.__organizerReady === true')
+        p3.wait_for_function('() => window.__organizerReady === true')
         skip_onboarding(p3)
-        before = p3.inner_text('main')
+        before = p3.inner_text('#top')
         p3.clock.run_for(120000)
-        after = p3.inner_text('main')
-        check('Смена дня: «Сегодня» само переключается после полуночи (ошибка 13)', 'пт, 9 окт' in before and 'сб, 10 окт' in after)
+        after = p3.inner_text('#top')
+        check('Смена дня: «Сегодня» само переключается после полуночи (ошибка 13)', '9 октября' in before and '10 октября' in after)
         c3.close()
 
+
     # ---- first launch with answers: the bedtime is suggested as the end of the day ----
+
     @step('Первый запуск с ответами')
     def _():
         c = browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id='Europe/Athens')
         q = new_page(c)
-        q.goto(BASE); q.wait_for_function('window.__organizerReady === true')
+        q.goto(BASE); q.wait_for_function('() => window.__organizerReady === true')
         q.fill('input[name=wake]', '07:30')
         q.fill('input[name=bed]', '01:30')
         check('Онбординг: «день заканчивается» подставляется из времени сна', q.input_value('input[name=cutoff]') == '01:30')
         q.click('form[data-form="onboarding.save"] button[type=submit]')
-        q.wait_for_selector('nav button')
+        q.wait_for_selector('nav#nav button')
         d = q.evaluate("JSON.parse(localStorage.getItem('organizer:data'))")
         check('Онбординг: ответы сохранены', d['settings']['day'] == {'wake': '07:30', 'bed': '01:30', 'cutoff': '01:30', 'setupDone': True}, str(d['settings']['day']))
-        q.click('#settings-btn')
+        settings(q)
         q.fill('form[data-form="day.save"] input[name=cutoff]', '03:00')
         q.click('form[data-form="day.save"] button[type=submit]')
         d = q.evaluate("JSON.parse(localStorage.getItem('organizer:data'))")
         check('Настройки: конец дня можно поменять вручную', d['settings']['day']['cutoff'] == '03:00' and d['settings']['day']['bed'] == '01:30')
         c.close()
 
+
     # ---- planning day after midnight, with a fake clock ----
+
     @step('Плановый день ночью')
     def _():
         c = browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id='Europe/Athens')
@@ -612,22 +653,21 @@ with sync_playwright() as p:
         q.clock.install(time=datetime.datetime(2026, 10, 9, 22, 0, tzinfo=ATHENS))
         seed(q, doc3('03:00', tasks=[task('fri', 'Пятничная задача', 'day', '2026-10-09', deadline='2026-10-09')],
                      events=[event('night', 'Ночной поезд', '2026-10-10T01:00'), event('sat', 'Субботний завтрак', '2026-10-10T09:00')]))
-        today = lambda: q.inner_text('main section:has(h2:text-matches("^Сегодня"))')
-        check('Пятница 22:00: «Сегодня» — пятница, видно «День заканчивается в 03:00»', 'пт, 9 окт' in today() and 'День заканчивается в 03:00' in today())
-        check('Пятница 22:00: ночное событие субботы (01:00) в расписании пятничного дня с реальной датой',
-              'Ночной поезд' in q.inner_text('main') and 'сб, 10 окт' in q.inner_text('main section:has(h2:text-is("Расписание"))') and 'Субботний завтрак' not in q.inner_text('main'))
+        top = lambda: q.inner_text('#top')
+        check('Пятница 22:00: заголовок — пятница, 9 октября', 'Пятница' in top() and '9 октября' in top(), top())
+        lst = lambda: q.inner_text('#today-list')
+        check('Пятница 22:00: ночное событие субботы (01:00) в списке пятничного дня с реальной датой',
+              'Ночной поезд' in lst() and '10' in lst() and 'Субботний завтрак' not in q.inner_text('main'), lst())
         q.clock.run_for(3 * 3600 * 1000 + 30 * 60 * 1000)  # → Saturday 01:30
-        check('Суббота 01:30: «Сегодня» всё ещё пятница, показана календарная дата', 'пт, 9 окт' in today() and 'По календарю: сб, 10 окт' in today())
-        check('Суббота 01:30: пятничная задача ещё не просрочена (нет разбора)', 'Утренний разбор' not in q.inner_text('main'))
-        q.fill('form[data-form="task.quickAdd"] textarea', 'Ночная задача')
-        q.select_option('form[data-form="task.quickAdd"] select', 'day')
-        q.click('form[data-form="task.quickAdd"] button[type=submit]')
+        check('Суббота 01:30: «Сегодня» всё ещё пятница, рядом пометка календарной даты', 'Пятница' in top() and '10' in top() and '9 октября' in top(), top())
+        check('Суббота 01:30: пятничная задача ещё не просрочена (нет «Хвостов»)', q.locator('[data-fold="tails"]').count() == 0)
+        add_text(q, 'Ночная задача')
         d = q.evaluate("JSON.parse(localStorage.getItem('organizer:data'))")
         t = [x for x in d['tasks'] if x['title'] == 'Ночная задача'][0]
-        check('Суббота 01:30: задача «на сегодня» попадает на пятницу (плановый день), время создания — реальное',
+        check('Суббота 01:30: задача из «＋» на Сегодня попадает на пятницу (плановый день), время создания — реальное',
               t['plan'] == {'kind': 'day', 'date': '2026-10-09'} and t['createdAt'].startswith('2026-10-09T22:30'), str(t['plan']) + ' ' + t['createdAt'])
         q.clock.run_for(91 * 60 * 1000)  # → Saturday 03:01
-        check('Суббота 03:01: «Сегодня» — суббота, пятничные задачи в утреннем разборе', 'сб, 10 окт' in today() and 'Утренний разбор · 2' in q.inner_text('main'))
+        check('Суббота 03:01: «Сегодня» — суббота, пятничные задачи в «Хвостах»', 'Суббота' in top() and q.locator('[data-fold="tails"] .count').inner_text() == '2', top())
         f = [x for x in q.evaluate("JSON.parse(localStorage.getItem('organizer:data'))")['tasks'] if x['id'] == 'fri'][0]
         check('Дедлайн и дата задачи не изменились', f['deadline'] == '2026-10-09' and f['plan']['date'] == '2026-10-09')
         c.close()
@@ -639,15 +679,16 @@ with sync_playwright() as p:
         q.clock.install(time=datetime.datetime(2026, 10, 9, 21, 0, tzinfo=ATHENS))
         seed(q, doc3('03:00', tasks=[task('fri', 'Пятничная задача', 'day', '2026-10-09')]))
         before = q.evaluate("localStorage.getItem('organizer:data')")
-        q.click('button[data-action="day.finish"]')
-        main = q.inner_text('main')
-        check('«Завершить день»: спрашивает подтверждение и переходит на субботу', any('Завершить' in m for m in dialogs) and 'сб, 10 окт' in main and 'Утренний разбор · 1' in main)
+        def menu_click(sel):
+            q.click('#more-btn'); q.wait_for_selector('#sheet-root .sheet'); q.wait_for_timeout(260); q.click(sel); q.wait_for_timeout(100)
+        menu_click('#sheet-root [data-action="day.finish"]')
+        check('«Завершить день»: спрашивает подтверждение и переходит на субботу', any('Завершить' in m for m in dialogs) and 'Суббота' in q.inner_text('#top') and q.locator('[data-fold="tails"] .count').inner_text() == '1', q.inner_text('#top'))
         check('«Завершить день»: данные органайзера не меняются', q.evaluate("localStorage.getItem('organizer:data')") == before)
-        q.click('button[data-action="day.undoFinish"]')
-        check('«Вернуть»: снова пятница', 'пт, 9 окт' in q.inner_text('main') and 'Утренний разбор' not in q.inner_text('main'))
-        q.click('button[data-action="day.finish"]')
+        menu_click('#sheet-root [data-action="day.undoFinish"]')
+        check('«Вернуть»: снова пятница, хвостов нет', 'Пятница' in q.inner_text('#top') and q.locator('[data-fold="tails"]').count() == 0)
+        menu_click('#sheet-root [data-action="day.finish"]')
         q.clock.run_for(6 * 3600 * 1000 + 60 * 1000)  # → Saturday 03:01
-        check('После 03:00 завершённый день не сдвигает дальше: суббота, а не воскресенье', 'сб, 10 окт' in q.inner_text('main'))
+        check('После 03:00 завершённый день не сдвигает дальше: суббота, а не воскресенье', 'Суббота' in q.inner_text('#top'), q.inner_text('#top'))
         c.close()
 
     @step('Вечерний конец дня')
@@ -656,12 +697,14 @@ with sync_playwright() as p:
         q = new_page(c)
         q.clock.install(time=datetime.datetime(2026, 12, 31, 22, 59, tzinfo=datetime.timezone(datetime.timedelta(hours=2))))
         seed(q, doc3('23:00'))
-        before = q.inner_text('main')
+        before = q.inner_text('#top')
         q.clock.run_for(2 * 60 * 1000)
-        check('Конец дня 23:00 в Новый год: в 23:01 31 декабря «Сегодня» уже 1 января', 'чт, 31 дек' in before and 'пт, 1 янв' in q.inner_text('main'), before[:120])
+        check('Конец дня 23:00 в Новый год: в 23:01 31 декабря «Сегодня» уже 1 января', '31 декабря' in before and '1 января' in q.inner_text('#top'), before[:120])
         c.close()
 
+
     # ---- a backup from another organizer (another person's device) ----
+
     @step('Чужая резервная копия')
     def _():
         c = browser.new_context(viewport={'width': 390, 'height': 844}, timezone_id='Europe/Athens', accept_downloads=True)
@@ -674,12 +717,11 @@ with sync_playwright() as p:
             accept = next((v for k, v in rules.items() if k in d.message), True)
             d.accept() if accept else d.dismiss()
         q.on('dialog', dlg)
-        q.goto(BASE); q.wait_for_function('window.__organizerReady === true')
+        q.goto(BASE); q.wait_for_function('() => window.__organizerReady === true')
         skip_onboarding(q)
-        q.fill('form[data-form="task.quickAdd"] textarea', 'Моя личная задача')
-        q.click('form[data-form="task.quickAdd"] button[type=submit]')
+        add_text(q, 'Моя личная задача')
         mine = q.evaluate("localStorage.getItem('organizer:data')")
-        q.click('nav button:text-is("Данные")')
+        tab('Данные', q)
         q.set_input_files('input[data-action="import.file"]', backup_path)  # made in the first context = another organizer
         q.wait_for_selector('button[data-action="import.apply"]', timeout=5000)
         check('Чужая копия: предпросмотр предупреждает, что она из другого органайзера', 'другом органайзере' in q.inner_text('main'))
@@ -694,6 +736,7 @@ with sync_playwright() as p:
               not any(t['title'] == 'Моя личная задача' for t in d['tasks']) and rb and any(t['title'] == 'Моя личная задача' for t in rb[0]['data']['tasks']))
         c.close()
 
+
     unexpected = [e for e in page_errors]
     check('Нет необработанных ошибок JavaScript на страницах', not unexpected, '; '.join(unexpected[:3]))
     csp = [e for e in console_errors if 'Content Security Policy' in e]
@@ -702,7 +745,7 @@ with sync_playwright() as p:
 
 srv.shutdown()
 passed = sum(1 for r in results if r[1])
-print(f'E2E: {passed}/{len(results)} checks passed')
+print(f'E2E-LEGACY: {passed}/{len(results)} checks passed')
 for name, ok, detail in results:
     print(('  ✓ ' if ok else '  ✗ ') + name + (f'  — {detail}' if detail else ''))
 json.dump([{'name': n, 'ok': o, 'detail': d} for n, o, d in results], open(os.path.join(OUT, 'e2e-results.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
