@@ -1,4 +1,12 @@
+- Settings gear replaces the app menu ellipsis; list management retains its own contextual menu.
+- Ordinary task and event rows no longer display an ellipsis; tapping text opens editing and long-pressing opens actions.
+- Task and ordinary list checkboxes are round, and checklist rows no longer have divider lines. Event preparation layout is unchanged.
+- In Today, Tasks and Calendar day/task groups, completed tasks are displayed after unfinished tasks. Ordinary List items are similarly ordered within their existing categories. Completion changes do not alter underlying record order: unchecking returns the item to its original position. Event preparation is unchanged.
+- No data format or storage-key changes. Version and offline cache bumped together.
+
 # Changelog
+
+## 0.5.1 — 2026-10-10 — Minimal checklist rows
 
 ## 0.5.0 — 2026-10-10 — Calm redesign: view first, edit only when asked
 

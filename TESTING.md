@@ -1,3 +1,10 @@
+## 0.5.1 verification notes (10 October 2026)
+
+- Source syntax checked using Node.js.
+- JavaScript unit tests: 310/310 in a Node.js test harness with mocked DOM and local file responses. This is not equivalent to real Chromium, Safari or iPhone testing.
+- 0.5.0 browser suites have been adjusted for intentional removal of per-row ellipsis buttons but were not run in this environment.
+- **Manual iPhone checks before relying on 0.5.1:** settings gear opens settings menu; tap task text to edit; hold task/event to open actions; task and list checks are round; unfinished entries appear above finished within the same day/category; unchecking returns to earlier position; event preparation order remains untouched; data/backup, offline operation and Russian/English still work.
+
 # TESTING.md — version 0.5.0
 
 ## 1. What was actually tested (2026-10-10, by Claude)

@@ -277,3 +277,25 @@ h3.sub { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 
 .sheet .field { align-items: center; }
 .sheet .editform .field input:not([type=checkbox]), .sheet .editform .field select { max-width: 62%; }
 @media (max-width: 380px) { .sheet .editform .field { flex-direction: column; align-items: stretch; gap: 4px; } .sheet .editform .field input:not([type=checkbox]), .sheet .editform .field select { max-width: 100%; } }
+
+/* 0.5.1 — calm checklist rows: no lines or repeated action buttons. */
+.trow, .erow, .irow, .tailrow { border-bottom: none; }
+/* Circle controls only for ordinary tasks and lists. Event preparation stays as it was. */
+.trow input[type=checkbox], .irow input[type=checkbox] {
+  -webkit-appearance: none; appearance: none;
+  width: 25px; height: 25px; min-width: 25px; min-height: 25px;
+  border: 2px solid var(--muted); border-radius: 50%;
+  background: transparent; display: inline-grid; place-items: center;
+  cursor: pointer; position: relative;
+}
+.trow input[type=checkbox]:checked, .irow input[type=checkbox]:checked {
+  border-color: var(--accent); background: var(--accent);
+}
+.trow input[type=checkbox]:checked::after, .irow input[type=checkbox]:checked::after {
+  content: ""; width: 6px; height: 11px;
+  border: solid var(--on-accent); border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+.trow input[type=checkbox]:focus-visible, .irow input[type=checkbox]:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 3px;
+}

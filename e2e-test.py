@@ -222,7 +222,7 @@ with sync_playwright() as p:
     @step('Удаление и восстановление')
     def _():
         tab('Задачи')
-        pg.locator('.row:has-text("Купить хлеб") .more').click(); pg.wait_for_selector('#sheet-root .sheet'); pg.wait_for_timeout(260)
+        pg.locator('.row:has-text("Купить хлеб") .ttext').dispatch_event('contextmenu'); pg.wait_for_selector('#sheet-root .sheet'); pg.wait_for_timeout(260)
         pg.click('#sheet-root [data-action="task.delete"]')
         check('Удаление: задача скрыта', 'Купить хлеб' not in main_text())
         t = [t for t in doc()['tasks'] if t['title'] == 'Купить хлеб'][0]

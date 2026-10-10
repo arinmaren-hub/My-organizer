@@ -6,7 +6,7 @@
 import { esc } from './util.js';
 import { t, getLang } from './i18n.js';
 import { activeLists } from './selectors.js';
-import { empty, foldBlock, moreButton } from './components.js';
+import { unfinishedFirst, empty, foldBlock, moreButton } from './components.js';
 import { groupItems, listTemplates, missingBuiltins, isBuiltinId, baseOf } from './templates.js';
 import { homeItems, buyItems, stockOf, STOCK_ORDER } from './home.js';
 import { ICONS } from './icons.js';
@@ -83,7 +83,7 @@ function listScreen(doc, r) {
   const groups = groupItems(c);
   const any = c.items.some(i => !i.deletedAt);
   let h = groups.map(g => {
-    const rows = g.items.map(i => itemRow(c, coll, i)).join('');
+    const rows = (coll === 'lists' ? unfinishedFirst(g.items) : g.items).map(i => itemRow(c, coll, i)).join('');
     if (g.category === null) return `<section class="list">${rows}</section>`;
     return foldBlock(`cat:${c.id}:${g.category}`, g.category, rows || empty(t('lists.categoryEmpty')), { count: String(g.items.length), defaultOpen: true });
   }).join('');

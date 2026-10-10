@@ -1,5 +1,5 @@
 import os
-"""Browser tests for 0.5.0 (the calm redesign) (headless Chromium, iPhone-sized screen).
+"""Browser tests for 0.5.1 (clean checklists) (headless Chromium, iPhone-sized screen).
 Usage: python3 e2e-v4-test.py <app_folder> <output_folder>
 Runs every flow twice (Russian, English); a contrast and layout audit runs in both
 languages and both themes. The clock of the page is fixed, so dates are exact.
@@ -151,7 +151,11 @@ with sync_playwright() as p:
         def row(self, title):
             return self.pg.locator('#main .row', has_text=title).first
         def more(self, title):
-            self.row(title).locator('.more').click(); self.wait_sheet()
+            row = self.row(title)
+            more = row.locator('.more')
+            if more.count(): more.click()
+            else: row.locator('.ttext').dispatch_event('contextmenu')
+            self.wait_sheet()
         def item(self, label):
             self.pg.locator('#sheet-root .menuitem', has_text=label).first.click()
         def menu_item(self, title, label):
@@ -202,7 +206,7 @@ with sync_playwright() as p:
         check(L + 'Нижняя панель: прижата к низу экрана и компактна (≤ 70px)', abs(nb['y'] + nb['height'] - 844) < 1.5 and nb['height'] <= 70, str(nb))
         check(L + 'Верхних больших кнопок навигации нет', pg.locator('header button:not(#more-btn):not(#back-btn)').count() == 0)
         check(L + 'Сегодня: слева сверху день недели и плановая дата', pg.inner_text('#app-title') == S['weekday'] and pg.inner_text('#subtitle') == S['date'], pg.inner_text('#top'))
-        check(L + 'Сегодня: справа сверху маленькая кнопка «···»', pg.locator('#more-btn').is_visible() and pg.locator('#more-btn svg').count() == 1)
+        check(L + 'Сегодня: справа сверху кнопка настроек', pg.locator('#more-btn').is_visible() and pg.locator('#more-btn svg').count() == 1)
         # order on Today: checklist, tails, waiting
         order = pg.evaluate("""() => { const q = s => document.querySelector(s); const pos = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
           const list = q('#today-list'), tails = q('[data-fold="tails"]'), wait = q('#waiting-section'); return [pos(list, tails), pos(tails, wait), !!list && !!tails && !!wait]; }""")
@@ -365,10 +369,10 @@ with sync_playwright() as p:
         heads = pg.locator('#main h2').all_inner_texts()
         check(L + 'Задачи: три группы (по дням / по неделям / без даты)', len(heads) >= 3, str(heads))
         r = s.row('Позвонить маме')
-        check(L + 'Строка: чекбокс, название, ровно одна «···»', r.locator('input[type=checkbox]').count() == 1 and r.locator('.more').count() == 1 and r.locator('button:not(.more)').count() == 0)
+        check(L + 'Строка: круглая галочка, название, без «···»', r.locator('input[type=checkbox]').count() == 1 and r.locator('.more').count() == 0 and r.locator('button').count() == 0 and pg.evaluate('(e) => getComputedStyle(e).borderRadius', r.locator('input[type=checkbox]').element_handle()) == '50%')
         check(L + 'Строка: мелкая дата/срок под названием', 'до' in r.locator('.meta').inner_text() or '20' in r.locator('.meta').inner_text(), r.locator('.meta').inner_text())
         check(L + 'Строка: время видно у задачи со временем', '09:30' in s.row('Купить хлеб').inner_text())
-        check(L + 'Нет постоянных кнопок и форм в группах (кроме «···» и чекбоксов)', pg.locator('#main .group button:not(.more)').count() == 0 and pg.locator('#main .group input:not([type=checkbox])').count() == 0)
+        check(L + 'Нет постоянных кнопок и форм в группах', pg.locator('#main .group button').count() == 0 and pg.locator('#main .group input:not([type=checkbox])').count() == 0)
         # recurring at the bottom, folded
         last = pg.evaluate("() => { const f = document.querySelector('[data-fold=recurring]'); return !!f && !f.nextElementSibling && f.querySelector('.foldbody').hidden; }")
         check(L + 'Повторяющиеся: в самом низу и свёрнуты', last)
@@ -455,7 +459,7 @@ with sync_playwright() as p:
         check(L + 'Вертикальный жест (прокрутка) отступ не создаёт', ind('b') in (None, False))
         s.row('Два').locator('input[type=checkbox]').click()
         check(L + 'Чекбокс по-прежнему работает рядом со свайпом', next(t for t in s.doc()['tasks'] if t['id'] == 'b')['done'] is True)
-        s.more('Три'); check(L + '«···» по-прежнему открывает меню', pg.locator('#sheet-root .menuitem').count() >= 5); s.close_sheet()
+        s.more('Три'); check(L + 'Контекстное меню доступно без кнопки', pg.locator('#sheet-root .menuitem').count() >= 5); s.close_sheet()
         # a day change turns the indented unfinished task into a tail -> cleared
         s.at('2026-10-10T12:00:00+03:00'); pg.wait_for_timeout(300)
         s.reload()
@@ -588,7 +592,7 @@ with sync_playwright() as p:
         check(L + 'День: события и задачи одним компактным списком', panel.locator('.erow').count() == 1 and panel.locator('.trow').count() >= 2)
         check(L + 'День: нет форм, полей, постоянных кнопок дат и карандашей/крестиков', panel.locator('form, input:not([type=checkbox]), select, textarea').count() == 0 and panel.locator('button:not(.more):not(.foldhead)').count() == 0, panel.inner_html()[:100])
         check(L + 'День: у события нет чекбокса выполнения', panel.locator('.erow input[type=checkbox]').count() == 0)
-        check(L + 'У каждой строки одна «···»', all(panel.locator('.row').nth(i).locator('.more').count() == 1 for i in range(panel.locator('.row').count())))
+        check(L + 'У строк нет лишних «···»', all(panel.locator('.row').nth(i).locator('.more').count() == 0 for i in range(panel.locator('.row').count())))
         # FAB uses the selected real date
         s.quick('позвонить врачу')
         t = s.tasks('позвонить врачу')[0]

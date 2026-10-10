@@ -2,9 +2,8 @@
 // through esc(); every interface text comes from i18n.js. Buttons carry
 // data-action / data-id; app.js handles them.
 //
-// Interface rule (0.5.0): a row shows only what is needed to read it — a checkbox, the title,
-// a small date/time line, and one «···» button. Everything else lives in the «···» menu, in the
-// edit sheet, or behind «+».
+// A task is a clean checklist row: checkbox and tappable text. A long press opens actions;
+// extra controls are not displayed unless requested. The original stored order is unchanged.
 
 import { esc } from './util.js';
 import { t, formatDay } from './i18n.js';
@@ -12,6 +11,12 @@ import { ICONS } from './icons.js';
 import { weekKey } from './dates.js';
 
 export const empty = (text = t('empty')) => `<p class="muted empty">${esc(text)}</p>`;
+
+// Stable view-only ordering: checked entries go after unchecked ones. Source arrays
+// stay intact so unchecking puts an entry back at its original position.
+export function unfinishedFirst(items) {
+  return [...items.filter(i => !i.done), ...items.filter(i => !!i.done)];
+}
 
 // Set by app.js before each draw: { today } (the planning day).
 export const uiState = { today: null, fold: {} };
@@ -44,16 +49,15 @@ export function taskRow(task, opts = {}) {
       <div class="grow ttext" data-action="task.open" data-id="${id}" role="button" tabindex="0">
         <div class="title">${esc(task.title)}</div>${meta.length ? `<div class="meta">${esc(meta.join(' · '))}</div>` : ''}
       </div>
-      ${moreButton('menu.task', task.id)}
     </div>`;
 }
 
 export function taskList(tasks, opts) {
-  return tasks.length ? tasks.map(task => taskRow(task, opts)).join('') : '';
+  return tasks.length ? unfinishedFirst(tasks).map(task => taskRow(task, opts)).join('') : '';
 }
 
-// A tail awaiting a decision: «Сегодня», «Завтра», «Выбрать дату», «Готово»; nothing else is offered
-// on the row (the rest is in «···»). Not touching it leaves it where it is.
+// A tail awaiting a decision: explicit review choices; advanced task actions by long press.
+// Not touching it leaves it where it is.
 export function tailRow(task, { part = 'am', note = '' } = {}) {
   const id = esc(task.id);
   const b = (choice, label, cls = '') => `<button type="button"${cls ? ` class="${cls}"` : ''} data-action="review" data-id="${id}" data-choice="${choice}" data-part="${part}">${esc(label)}</button>`;
@@ -68,7 +72,6 @@ export function tailRow(task, { part = 'am', note = '' } = {}) {
         <div class="moves">${part === 'am' ? b('today', t('move.today')) : ''}${b('tomorrow', t('tail.tomorrow'))}
           <button type="button" data-action="tail.pick" data-id="${id}" data-part="${part}">${esc(t('tail.pick'))}</button>${b('done', t('tail.done'))}</div>
       </div>
-      ${moreButton('menu.task', task.id, undefined, ` data-part="${part}"`)}
     </div>`;
 }
 
@@ -82,7 +85,6 @@ export function eventRow(e, label) {
       <div class="grow ttext" data-action="event.open" data-id="${id}" role="button" tabindex="0">
         <span class="etime">${esc(label)}</span> <span class="title">${esc(e.title)}</span>${count}
       </div>
-      ${moreButton('menu.event', e.id)}
     </div>`;
 }
 

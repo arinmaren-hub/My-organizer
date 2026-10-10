@@ -4,7 +4,7 @@
 import { esc } from './util.js';
 import { t, formatDay } from './i18n.js';
 import { tasksByKind, activeSeries } from './selectors.js';
-import { taskRow, empty, foldBlock, moreButton } from './components.js';
+import { taskRow, unfinishedFirst, empty, foldBlock, moreButton } from './components.js';
 import { SERIES_FREQS } from './schema.js';
 import { seriesHistory } from './recur.js';
 import { ICONS } from './icons.js';
@@ -60,14 +60,14 @@ function recurring(doc, today) {
 function dayGroups(tasks) {
   const byDay = new Map();
   for (const x of tasks) byDay.set(x.plan.date, [...(byDay.get(x.plan.date) || []), x]);
-  return [...byDay.entries()].map(([day, list]) => `<h3 class="sub">${esc(formatDay(day))}</h3>${list.map(x => taskRow(x)).join('')}`).join('');
+  return [...byDay.entries()].map(([day, list]) => `<h3 class="sub">${esc(formatDay(day))}</h3>${unfinishedFirst(list).map(x => taskRow(x)).join('')}`).join('');
 }
 
 export function renderTasks(doc, ctx) {
   const day = tasksByKind(doc, 'day'), week = tasksByKind(doc, 'week'), none = tasksByKind(doc, 'none');
   const group = (key, count, body) => `<section class="group"><h2>${esc(t(key))}${count ? ` <span class="count">${count}</span>` : ''}</h2>${body || empty(t('tasks.groupEmpty'))}</section>`;
   return group('tasks.byDay', day.length, dayGroups(day)) +
-    group('tasks.byWeek', week.length, week.map(x => taskRow(x, { plan: true })).join('')) +
-    group('tasks.none', none.length, none.map(x => taskRow(x)).join('')) +
+    group('tasks.byWeek', week.length, unfinishedFirst(week).map(x => taskRow(x, { plan: true })).join('')) +
+    group('tasks.none', none.length, unfinishedFirst(none).map(x => taskRow(x)).join('')) +
     recurring(doc, ctx.today);
 }

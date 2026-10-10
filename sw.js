@@ -6,7 +6,7 @@
 // that an update exists; they then show the "new version available" banner.
 // If you add a new file, add it to ASSETS too (tests.html checks both).
 
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 const CACHE = 'organizer-' + VERSION;
 const ASSETS = [
   './',

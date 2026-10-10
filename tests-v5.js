@@ -12,6 +12,8 @@ import { RU5, EN5 } from './i18n-v5.js';
 import { setLang, t, dayLong } from './i18n.js';
 import { listTemplates, missingBuiltins } from './templates.js';
 import { dayContents } from './calendar.js';
+import { unfinishedFirst, taskList, taskRow, eventRow } from './components.js';
+import { renderLists } from './view-lists.js';
 
 export function registerV5(h) {
   const { test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopies } = h;
@@ -624,4 +626,43 @@ export function registerV5(h) {
     const w = store.doc.waiting.find(x => x.title === 'Сдать отчёт');
     eq(w.followUp, '2026-10-12');
   });
+
+  // ---------- 0.5.1 compact checklists and view-only completion sorting ----------
+  const C51 = 'Компактные списки 0.5.1';
+  test(C51, 'выполненное уходит вниз, порядок остальных не меняется и исходные данные остаются прежними', () => {
+    const rows = [{id:'1', done:false}, {id:'2', done:true}, {id:'3', done:false}, {id:'4', done:true}];
+    eq(unfinishedFirst(rows).map(x=>x.id), ['1','3','2','4']);
+    eq(rows.map(x=>x.id), ['1','2','3','4']);
+    rows[1].done = false;
+    eq(unfinishedFirst(rows).map(x=>x.id), ['1','2','3','4'], 'сняли галочку — вернулось на прежнее место');
+  });
+  test(C51, 'обычные задачи: строки без видимых троеточий, нажатие на название по-прежнему открывает правку', () => {
+    const { store } = setup({ [KEYS.data]: V4_RAW });
+    const html = taskRow(store.doc.tasks[0]);
+    ok(html.includes('data-action="task.open"'));
+    ok(html.includes('data-action="task.toggle"'));
+    ok(!html.includes('menu.task') && !html.includes('class="more"'));
+    const ehtml = eventRow(store.doc.events[0], '10:00');
+    ok(ehtml.includes('data-action="event.open"') && !ehtml.includes('menu.event'));
+  });
+  test(C51, 'дневной список отображает выполненные задачи снизу без перестановки хранимых записей', () => {
+    const { store } = setup({ [KEYS.data]: V4_RAW });
+    const a = store.doc.tasks[0], b = store.doc.tasks[1], c = store.doc.tasks[2];
+    const arr = [a,b,c];
+    const html = taskList(arr);
+    eq([a.id,b.id,c.id], ['a1','a2','a3']);
+    ok(html.indexOf('data-id="a1"') < html.indexOf('data-id="a3"'));
+    ok(html.indexOf('data-id="a3"') < html.indexOf('data-id="a2"'));
+  });
+  test(C51, 'в обычном списке выполненные уходят вниз внутри категории, шаблоны остаются в исходном порядке', () => {
+    const { store } = setup({ [KEYS.data]: V4_RAW });
+    store.update('test', d => {
+      const l = d.lists.find(x => x.id === 'l1');
+      l.items.push({ ...l.items[0], id:'i-new', title:'Йогурт', done:false });
+    });
+    const html = renderLists(store.doc, { ui: { list: 'l:l1' } });
+    ok(html.indexOf('Молоко') > html.indexOf('Йогурт'), 'выполненный пункт после невыполненного в своей категории');
+    eq(store.doc.lists.find(l => l.id === 'l1').items[0].title, 'Молоко', 'исходное хранение не тронутo');
+  });
+
 }

@@ -507,3 +507,12 @@ Details, limits and evidence are in `SECURITY.md`. Rules every future update mus
 - Nothing is merged: edits made to either record stay in that record.
 - Known limit: «Ожидаю от других» made from a task is **not** linked this way, so restoring that task from «Удалённые» while the waiting item is active gives both. Nothing is lost.
 - Known limit: importing a backup that already has both sides active is not corrected.
+
+
+### B13. Everyday checklist simplification (owner, 2026-10-10; version 0.5.1)
+
+- The top application menu is shown as a **settings gear**, not an ellipsis. Contextual management on individual lists/templates can retain its ellipsis.
+- Task and event rows on Today, Tasks, and Calendar show a checkbox (tasks only), text and optional time/date, with **no permanent per-record ellipsis**. Tap title to edit; long-press or keyboard context-menu opens actions.
+- Remove separator lines between ordinary checklist rows. Task and ordinary-list checkboxes are round. The event-preparation checklist is **not redesigned** in this release.
+- Within each task-day/week/undated group, unfinished tasks render above completed tasks; completed tasks stay visible, muted and struck through. Ordinary list entries follow the same rule **within their existing category**. No record is reordered in storage, so unchecking restores the original relative position among unfinished items.
+- Do not auto-sort the event-preparation checklists in this release. Manual task drag/reorder remains postponed. No data schema changes.

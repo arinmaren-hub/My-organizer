@@ -6,7 +6,7 @@ import { esc } from './util.js';
 import { dateKey, addDays, isoWeekday } from './dates.js';
 import { t, dayLong, monthName, monthShort, weekdayShort, weekdayLong } from './i18n.js';
 import { monthGrid, shiftMonth, summarizeRange, dayContents, firstOfMonth } from './calendar.js';
-import { taskRow, eventRow, empty, foldBlock } from './components.js';
+import { taskRow, eventRow, unfinishedFirst, empty, foldBlock } from './components.js';
 
 const WEEKDAY_ROW = () => Array.from({ length: 7 }, (_, i) => `<div class="wd" aria-hidden="true">${esc(weekdayShort(i))}</div>`).join('');
 
@@ -74,12 +74,12 @@ function dayPanel(doc, cal, ctx) {
   if (d === ctx.calendarToday) tags.push(t('cal.isToday'));
   if (d === ctx.today) tags.push(t('cal.isPlanning'));
   const wd = weekdayLong(isoWeekday(d) - 1);
-  const main = c.events.map(e => eventRow(e, e.start.slice(11))).join('') + c.tasks.map(x => taskRow(x)).join('');
+  const main = c.events.map(e => eventRow(e, e.start.slice(11))).join('') + unfinishedFirst(c.tasks).map(x => taskRow(x)).join('');
   let body = main ? `<div class="list">${main}</div>` : '';
   if (c.deadlines.length) body += `<h3 class="sub">${esc(t('cal.deadlines'))}</h3>${c.deadlines.map(x => taskRow(x, { swipe: false })).join('')}`;
   if (c.repeats.length) body += `<h3 class="sub">${esc(t('cal.repeats'))}</h3>${c.repeats.map(r => `<div class="row"><div class="grow">↻ ${esc(r.title)}</div></div>`).join('')}`;
   if (!body) body = empty(t('cal.noItems'));
-  const week = c.weekTasks.length ? foldBlock('calweek', t('cal.weekTasks', { n: c.weekTasks.length }), c.weekTasks.map(x => taskRow(x)).join('')) : '';
+  const week = c.weekTasks.length ? foldBlock('calweek', t('cal.weekTasks', { n: c.weekTasks.length }), unfinishedFirst(c.weekTasks).map(x => taskRow(x)).join('')) : '';
   return `<section id="day-panel">
     <h2 class="daytitle">${esc(wd)}, ${esc(dayLong(d))}</h2>
     ${tags.length ? `<p class="muted small">${esc(tags.join(' · '))}</p>` : ''}

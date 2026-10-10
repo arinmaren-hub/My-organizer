@@ -8,7 +8,7 @@ import { weekKey } from './dates.js';
 import { t } from './i18n.js';
 import { dayWindow } from './planday.js';
 import { morningReview, unconfirmedOccurrences, tasksForDay, tasksForWeek, eventsInWindow } from './selectors.js';
-import { taskRow, tailRow, eventRow, empty, foldBlock } from './components.js';
+import { taskList, tailRow, eventRow, empty, foldBlock } from './components.js';
 import { renderWaitingDue, renderWaitingSection } from './view-waiting.js';
 import { ICONS } from './icons.js';
 
@@ -65,5 +65,5 @@ export function renderToday(doc, ctx) {
 }
 
 function taskList(tasks, opts) {
-  return tasks.map(task => taskRow(task, opts)).join('');
+  return taskList(tasks, opts);
 }

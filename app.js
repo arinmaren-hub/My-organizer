@@ -136,7 +136,7 @@ const needsOnboarding = () => !store.doc.settings.day.setupDone && !store.status
 // What the page header shows: Today = weekday + planning date; other screens = their name.
 function headerInfo(onboarding, lr) {
   if (onboarding) return { title: t('app.title'), sub: '', back: null, more: null };
-  const more = { action: 'menu.app', label: t('aria.menu') };
+  const more = { action: 'menu.app', label: t('tab.settings') };
   if (ui.tab === 'today') {
     const sub = [dayLong(ui.today)];
     if (ui.calendarToday !== ui.today) sub.push(t('day.calendarNow', { day: { $day: ui.calendarToday } }));
@@ -202,7 +202,7 @@ function render() {
   back.setAttribute('aria-label', t('btn.back'));
   const more = $('#more-btn');
   more.hidden = !head.more;
-  if (head.more) { more.dataset.action = head.more.action; more.setAttribute('aria-label', head.more.label); more.innerHTML = ICONS.more; }
+  if (head.more) { more.dataset.action = head.more.action; more.setAttribute('aria-label', head.more.label); more.innerHTML = head.more.action === 'menu.app' ? ICONS.settings : ICONS.more; }
   $('#nav').hidden = onboarding;
   document.body.classList.toggle('no-nav', onboarding);
   const curTab = TABS.includes(ui.tab) ? ui.tab : ui.prev;
@@ -871,6 +871,10 @@ document.addEventListener('submit', e => {
 // Rows that look like buttons also answer to the keyboard.
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && ui.sheet) { closeSheet(); return; }
+  if ((e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) && !ui.sheet) {
+    const row = e.target.closest && e.target.closest('.trow, .erow, .tailrow, .wrow, .srow');
+    if (row) { e.preventDefault(); openRowMenu(row); return; }
+  }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[role="button"][data-action]')) {
     e.preventDefault();
     e.target.click();
