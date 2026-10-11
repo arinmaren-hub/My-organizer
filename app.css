@@ -288,3 +288,27 @@ h3.sub { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 
 .trow input[type=checkbox]:checked::after, .irow input[type=checkbox]:checked::after {
   content: ''; position: absolute; left: 7px; top: 3px; width: 5px; height: 10px; box-sizing: content-box;
   border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+/* ---- 0.6.0: Tasks screen, search, highlight ---- */
+.group > h2 { display: flex; align-items: center; gap: 8px; }
+.h2-plus { margin-left: auto; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--muted); border-radius: 12px; padding: 0; }
+.h2-plus svg { width: 22px; height: 22px; }
+.sheet-tall { min-height: min(70vh, 560px); }
+.srch-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.srch { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; border: none; background: transparent; color: var(--ink); padding: 8px 4px; min-height: 44px; border-radius: 10px; }
+.srch .stitle { font-size: 16px; overflow-wrap: anywhere; }
+.srch.is-done .stitle { text-decoration: line-through; color: var(--done); }
+.srch.event .stitle { font-weight: 600; }
+.row.hl { background: var(--note-bg); outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 10px; animation: hl-fade 2.6s ease-out forwards; }
+@keyframes hl-fade { 0%, 70% { background: var(--note-bg); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .row.hl { animation: none; } }
+#undo { position: fixed; z-index: 24; left: 12px; right: 76px; max-width: 460px; bottom: calc(72px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 14px; background: var(--accent); color: var(--on-accent); border-radius: 14px; box-shadow: var(--shadow); font-size: 15px; }
+#undo[hidden] { display: none; }
+#undo button { flex: none; min-height: 40px; padding: 0 14px; border: none; border-radius: 10px; background: transparent; color: var(--on-accent); font-weight: 600; text-decoration: underline; }
+.totals { list-style: none; margin: 8px 0 0; padding: 0; }
+.totals li { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; }
+.crow { align-items: center; }
+.crow .keep { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; }
+.cleanup-card { margin-top: 0; }
+.sheet select, .editform select { max-width: 100%; min-width: 0; }

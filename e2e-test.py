@@ -267,7 +267,7 @@ with sync_playwright() as p:
             pg.click('main button[data-action="backup.export"]')
         dl.value.save_as(backup_path)
         data = json.load(open(backup_path, encoding='utf-8'))
-        check('Экспорт: файл скачан, формат резервной копии', data.get('app') == 'organizer' and data.get('kind') == 'backup' and data.get('schemaVersion') == 4)
+        check('Экспорт: файл скачан, формат резервной копии', data.get('app') == 'organizer' and data.get('kind') == 'backup' and data.get('schemaVersion') == 5)
         check('Экспорт: в файле есть id органайзера и нет сведений об устройстве', data['data'].get('dataId') and 'lastBackupAt' not in json.dumps(data))
         check('Экспорт: имя файла с датой', re.match(r'organizer-backup-\d{4}-\d{2}-\d{2}-\d{4}\.json$', dl.value.suggested_filename) is not None, dl.value.suggested_filename)
         check('Экспорт: в файле все данные', len(data['data']['tasks']) == len(doc()['tasks']) and len(data['data']['lists']) == 1 and len(data['data']['projects']) == 1)

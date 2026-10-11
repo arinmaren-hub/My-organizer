@@ -43,14 +43,15 @@ export function registerV5(h) {
   });
 
   const G = 'Обновление до 0.5.0';
-  test(G, 'данные 0.4.0 загружаются без изменений: схема та же, ничего не переписано, не потеряно', () => {
+  test(G, 'данные 0.4.0 (схема 4) переходят на схему 5 без потерь: все записи на месте, есть страховочная копия', () => {
     const { store, storage } = setup({ [KEYS.data]: V4_RAW });
     ok(!store.status.readOnly);
     const before = JSON.parse(V4_RAW), after = JSON.parse(JSON.stringify(store.doc));
-    eq(SCHEMA_VERSION, 4, 'схема не менялась');
-    for (const k of Object.keys(before)) if (k !== 'updatedAt') eq(after[k], before[k], k);
-    eq(rollbackCopies(store).length, 0, 'миграции нет — страховочная копия не нужна');
-    ok(storage.get(KEYS.data) === V4_RAW || savedDoc(storage).dataId === 'org-frozen-4');
+    eq(SCHEMA_VERSION, 5, 'схема 0.6.0');
+    for (const k of Object.keys(before)) if (k !== 'updatedAt' && k !== 'schemaVersion') eq(after[k], before[k], k);
+    eq(after.schemaVersion, 5);
+    eq(rollbackCopies(store).length, 1, 'перед переходом на новый формат сохранена копия прежних данных');
+    eq(savedDoc(storage).dataId, 'org-frozen-4');
   });
   test(G, 'после обновления данные 0.4.0 работают с новыми функциями, не теряя старых полей', () => {
     const { store } = setup({ [KEYS.data]: V4_RAW });

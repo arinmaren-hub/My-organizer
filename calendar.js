@@ -57,7 +57,7 @@ export function dayContents(doc, date, today = null) {
     weekTasks: tasksForWeek(doc, weekKey(date)),
     // only dates from the planning day on: earlier days show what was really created
     repeats: (today && date < today) ? [] : activeSeries(doc).filter(s => s.mode === 'fixed' && !s.paused &&
-      upcomingDates(s, date, 1)[0] === date && !doc.tasks.some(t => t.seriesId === s.id && t.occurrenceDate === date))
+      upcomingDates(s, date, 1)[0] === date && !(s.kind === 'event' ? doc.events : doc.tasks).some(t => t.seriesId === s.id && t.occurrenceDate === date))
   };
 }
 

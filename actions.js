@@ -2,12 +2,13 @@
 // Each one edits a draft copy inside store.update(); throwing an Error cancels it
 // and shows the message. Screens call these; they never edit data themselves.
 
-import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, PLAN_KINDS, SERIES_FREQS, SERIES_MODES } from './schema.js';
+import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, PLAN_KINDS, SERIES_FREQS, SERIES_MODES, SERIES_MONTHLY_RULES } from './schema.js';
 import { isDateKey, isDateTime, isTime, weekKey, addDays } from './dates.js';
 import { parseQuick } from './parsedate.js';
-import { ensureOccurrences, afterCompletion, isOpen } from './recur.js';
+import { ensureOccurrences, afterCompletion, isOpen, isUntouchedEventOccurrence, eventTimes } from './recur.js';
 import { isBuiltinId, baseOf, builtinTemplate } from './templates.js';
 import { clone } from './util.js';
+import { removeCleanup } from './cleanup.js';
 import { suggestCutoff } from './planday.js';
 import { homeList, stockOf } from './home.js';
 import { appError, t, getLang } from './i18n.js';
@@ -196,6 +197,18 @@ export function softDelete(store, collection, id) {
     r.updatedAt = now;
     if (collection === 'series') { // the open occurrences go with the series; finished ones stay as history
       for (const t of d.tasks) if (t.seriesId === id && isOpen(t)) { t.deletedAt = now; t.updatedAt = now; }
+      if (r.kind === 'event') { // future occurrences: untouched ones were only made by the series and are removed; edited ones are kept as deleted records
+        for (const e of d.events.slice()) {
+          if (e.seriesId !== id || e.deletedAt || e.occurrenceDate < ctx.today) continue;
+          if (isUntouchedEventOccurrence(e, r)) d.events.splice(d.events.indexOf(e), 1);
+          else { e.deletedAt = now; e.updatedAt = now; }
+        }
+      }
+    }
+    // Deleting an occurrence of a recurring EVENT skips that date for good (the series never makes it again).
+    if (collection === 'events' && r.seriesId) {
+      const s = d.series.find(x => x.id === r.seriesId);
+      if (s && !(s.skip || []).includes(r.occurrenceDate)) { s.skip = [...(s.skip || []), r.occurrenceDate].sort(); s.updatedAt = now; }
     }
     // Deleting the open occurrence of a recurring task counts as skipping it: the next one is created.
     if (collection === 'tasks' && r.seriesId) ensureOccurrences(d, ctx);
@@ -264,6 +277,10 @@ export function restoreDeleted(store, collection, id, { confirmed = false } = {}
     }
     r.deletedAt = null;
     r.updatedAt = now;
+    if (collection === 'events' && r.seriesId) { // restoring a deleted occurrence takes its date off the skip list
+      const s = d.series.find(x => x.id === r.seriesId);
+      if (s && s.skip) { s.skip = s.skip.filter(x => x !== r.occurrenceDate); if (!s.skip.length) delete s.skip; s.updatedAt = now; }
+    }
     if (collection === 'series') { // the time it was deleted is not backfilled
       if (r.mode === 'fixed') r.generatedThrough = addDays(ctx.today, -1);
       ensureOccurrences(d, ctx);
@@ -452,24 +469,39 @@ export function syncSeries(store) {
   return out;
 }
 
-function cleanSeries(f, today) {
+function cleanSeries(f, today, fixedKind = null) {
   const title = String(f.title || '').trim();
   if (!title) throw appError('err.needTitle');
   if (!SERIES_FREQS.includes(f.freq)) throw appError('err.badFreq');
   const interval = Number(f.interval === '' || f.interval == null ? 1 : f.interval);
   if (!Number.isInteger(interval) || interval < 1 || interval > 999) throw appError('err.badInterval');
-  const mode = f.mode == null ? 'completion' : f.mode;
+  const isEvent = (fixedKind || f.kind) === 'event';
+  const mode = isEvent ? 'fixed' : (f.mode == null ? 'completion' : f.mode);
   if (!SERIES_MODES.includes(mode)) throw appError('err.badMode');
   const startDate = isDateKey(f.startDate) ? f.startDate : today;
   const time = f.time ? String(f.time).slice(0, 5) : null;
   if (time !== null && !isTime(time)) throw appError('err.badTime');
-  return { title, freq: f.freq, interval, mode, startDate, time };
+  if (isEvent && time === null) throw appError('err.needEventTime');
+  const until = f.until ? String(f.until) : null;
+  if (until !== null && (!isDateKey(until) || until < startDate)) throw appError('err.badUntil');
+  const monthBy = f.freq === 'monthly' && mode === 'fixed' && SERIES_MONTHLY_RULES.includes(f.monthBy) ? f.monthBy : null;
+  const endTime = isEvent && f.endTime ? String(f.endTime).slice(0, 5) : null;
+  if (endTime !== null && (!isTime(endTime) || endTime <= time)) throw appError('err.badEnd');
+  return { title, freq: f.freq, interval, mode, startDate, time, until, monthBy, endTime, kind: isEvent ? 'event' : null };
+}
+
+// Optional series fields are removed instead of stored as null (they are optional in the schema).
+function applySeriesFields(s, c) {
+  const { until, monthBy, endTime, kind, ...core } = c;
+  Object.assign(s, core);
+  for (const [k, v] of [['until', until], ['monthBy', monthBy], ['endTime', endTime], ['kind', kind]]) { if (v) s[k] = v; else delete s[k]; }
 }
 
 export function addSeries(store, f) {
   return store.update('act.series', (d, ctx) => {
     const c = cleanSeries(f, ctx.today);
-    const s = newSeries({ id: ctx.uid(), ...c, now: ctx.now });
+    const s = newSeries({ id: ctx.uid(), title: c.title, freq: c.freq, interval: c.interval, mode: c.mode, startDate: c.startDate, time: c.time, now: ctx.now });
+    applySeriesFields(s, c);
     d.series.push(s);
     ensureOccurrences(d, ctx);
     return s.id;
@@ -478,16 +510,33 @@ export function addSeries(store, f) {
 
 // Changes the rule for FUTURE occurrences. With applyToOpen the open occurrences take the new
 // title and time too. Dates that already exist are never regenerated.
+// A recurring EVENT series: past occurrences are never touched. If the rule (frequency, interval, start, end date,
+// monthly rule) changed, the untouched future occurrences are made again from the new rule; occurrences you edited
+// yourself stay as they are. If only title/time/end changed, applyToOpen decides whether untouched future ones follow.
 export function editSeries(store, id, f, applyToOpen = false) {
   return store.update('act.series', (d, ctx) => {
     const s = findAlive(d.series, id, 'what.series');
-    const c = cleanSeries(f, ctx.today);
+    const c = cleanSeries(f, ctx.today, s.kind || 'task');
     const wasMode = s.mode;
-    Object.assign(s, c);
+    const old = clone(s);
+    applySeriesFields(s, c);
     // switching to the fixed rhythm starts from today: the past is not backfilled
     if (wasMode === 'completion' && s.mode === 'fixed') s.generatedThrough = addDays(ctx.today, -1);
     s.updatedAt = ctx.now;
-    if (applyToOpen) {
+    if (s.kind === 'event') {
+      const same = k => (old[k] ?? null) === (s[k] ?? null);
+      const ruleChanged = !['freq', 'interval', 'startDate', 'until', 'monthBy'].every(same);
+      const looksChanged = !['title', 'time', 'endTime'].every(same);
+      for (const e of d.events.slice()) {
+        if (e.seriesId !== id || e.deletedAt || e.occurrenceDate < ctx.today || !isUntouchedEventOccurrence(e, old)) continue;
+        if (ruleChanged) d.events.splice(d.events.indexOf(e), 1);
+        else if (applyToOpen && looksChanged) {
+          const { start, end } = eventTimes(s, e.occurrenceDate);
+          e.title = s.title; e.start = start; e.end = end; e.updatedAt = ctx.now;
+        }
+      }
+      if (ruleChanged) s.generatedThrough = addDays(ctx.today, -1);
+    } else if (applyToOpen) {
       for (const t of d.tasks) if (t.seriesId === id && isOpen(t)) {
         t.title = c.title;
         if (t.plan.kind === 'day') t.time = c.time;
@@ -859,6 +908,7 @@ export function convertTaskToEvent(store, id, { date = '', time = '', confirmed 
 export function convertEventToTask(store, id, { confirmed = false } = {}) {
   return store.update('act.convert', (d, { now, uid }) => {
     const e = findAlive(d.events, id, 'what.event');
+    if (e.seriesId) throw appError('err.convertSeries'); // an occurrence of a recurring event stays an event
     if (eventConversionLosses(e).length && !confirmed) throw appError('err.convertConfirm');
     const task = newTask({ id: uid(), title: e.title, plan: { kind: 'day', date: e.start.slice(0, 10) }, now });
     task.time = e.start.slice(11, 16);
@@ -979,4 +1029,49 @@ export function markBought(store, itemId) {
     if (stockOf(i) !== 'out') return;
     i.stock = 'have'; i.updatedAt = now; h.updatedAt = now;
   });
+}
+
+// ---------- Undo (0.6.0) ----------
+// Each takes the values saved BEFORE the action and puts them back. app.js only calls these while the record
+// is still exactly as the action left it (so a newer change by the person is never overwritten).
+export function undoTaskFields(store, id, snap) {
+  return store.update('act.undo', (d, ctx) => {
+    const t = findAlive(d.tasks, id, 'what.task');
+    const wasDone = !!t.done;
+    t.done = !!snap.done; t.completedAt = snap.completedAt ?? null; t.doneDay = snap.doneDay ?? null;
+    t.plan = clone(snap.plan);
+    t.time = snap.time ?? null; t.reminder = snap.reminder ?? null;
+    if (snap.indent) t.indent = snap.indent; else delete t.indent;
+    t.updatedAt = ctx.now;
+    if (t.seriesId && wasDone !== t.done) {
+      if (!t.done) dropUntouchedSuccessor(d, t);
+      ensureOccurrences(d, ctx);
+    }
+  });
+}
+
+export function undoContainerItemDelete(store, coll, id, itemId) {
+  return store.update('act.undo', (d, ctx) => {
+    const c = container(d, ctx, coll, id);
+    const i = c.items.find(x => x.id === itemId && x.deletedAt);
+    if (!i) throw appError('err.deletedNotFound');
+    i.deletedAt = null; i.updatedAt = ctx.now;
+    c.updatedAt = ctx.now;
+  });
+}
+
+// ---------- Keep forever / cleanup (0.6.0) ----------
+export function setKeep(store, coll, id, on) {
+  if (!['tasks', 'events', 'lists'].includes(coll)) return false;
+  return store.update('act.keep', (d, ctx) => {
+    const r = findAlive(d[coll], id, LABELS[coll]);
+    if (on) r.keep = true; else delete r.keep;
+    r.updatedAt = ctx.now;
+  });
+}
+
+// Permanently removes eligible old records (cleanup.js decides what is eligible, again, on the draft).
+// keys = Set of entry keys, or null for every eligible record. The CALLER makes sure a backup was saved first.
+export function runCleanup(store, today, keys = null) {
+  return store.update('act.cleanup', (d, ctx) => removeCleanup(d, today, ctx.now, keys));
 }

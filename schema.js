@@ -18,15 +18,20 @@ import { isDateKey, isTime, isDateTime, weekKey } from './dates.js';
 import { isPlainObject } from './util.js';
 
 // Version history: 1 = prototype (no number), 2 = 0.2.x, 3 = 0.3.0 (adds settings.day),
-// 4 = 0.4.0 (adds series, waiting, templates; task review/series fields; list categories).
+// 4 = 0.4.0 (adds series, waiting, templates; task review/series fields; list categories),
+// 5 = 0.6.0 (recurring EVENTS are series with kind 'event'; series end date, monthly weekday rule, skip list;
+//     optional `keep` («Хранить всегда») on tasks, events and lists; events may carry seriesId/occurrenceDate).
+// 5 is a version bump only: nothing is converted. It exists so that an older app can never read 0.6.0 data
+// (it would mistake an event series for a task series) — it goes read-only instead.
 // Every step only ADDS fields and collections with defaults, so upgrading never removes data.
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const STOCK_STATES = ['have', 'low', 'out'];
 export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists', 'series', 'waiting', 'templates'];
 export const PLAN_KINDS = ['day', 'week', 'none'];
 export const REVIEW_CHOICES = ['moved', 'kept', 'done'];
 export const SERIES_FREQS = ['daily', 'weekly', 'monthly', 'yearly'];
 export const SERIES_MODES = ['completion', 'fixed'];
+export const SERIES_MONTHLY_RULES = ['nth', 'last']; // monthly «by weekday»: the n-th such weekday, or the last one (default = same day number)
 export const BUILTIN_TEMPLATES = ['supermarket', 'suitcase'];
 
 const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
@@ -180,6 +185,7 @@ function checkTask(r, now) {
   if (t.doneDay !== null && !isDateKey(t.doneDay)) return fail('reason.badDoneDay');
   // `indent` (0.5.0): the task is shown shifted one step to the right. Optional; only `true` is kept.
   if (t.indent !== true) delete t.indent;
+  if (t.keep !== true) delete t.keep; // 0.6.0: «Хранить всегда» — never offered for cleanup
   // `convertedFrom` / `convertedTo` (0.5.0): ids of the event this task was made from / turned into
   // (task ↔ event conversion). Optional; anything that is not an id is dropped. Used only to keep
   // a restored original from duplicating its converted copy.
@@ -219,6 +225,11 @@ function checkEvent(r, now) {
     nested = res.bad;
   }
   for (const k of ['convertedFrom', 'convertedTo']) if (e[k] !== undefined && !isId(e[k])) delete e[k]; // see checkTask
+  // 0.6.0: an occurrence of a recurring event carries its series and the date the rule produced; both or neither.
+  if (e.seriesId !== undefined || e.occurrenceDate !== undefined) {
+    if (!isId(e.seriesId) || !isDateKey(e.occurrenceDate)) { delete e.seriesId; delete e.occurrenceDate; }
+  }
+  if (e.keep !== true) delete e.keep;
   const s = stamps(e, now);
   return s ? fail(s) : { value: e, nested };
 }
@@ -275,6 +286,7 @@ function checkList(r, now) {
   if (l.categories !== undefined && (!Array.isArray(l.categories) || !l.categories.every(isStr))) return fail('reason.badCategories');
   // `kind: 'home'` (0.5.0) marks the permanent household inventory; any other value is dropped.
   if (l.kind !== undefined && l.kind !== 'home') delete l.kind;
+  if (l.keep !== true) delete l.keep; // 0.6.0
   const s = stamps(l, now);
   if (s) return fail(s);
   const { kept, bad } = checkNested(l.items, 'items', now);
@@ -333,6 +345,14 @@ function checkSeries(r, now) {
   if (x.generatedThrough !== null && !isDateKey(x.generatedThrough)) return fail('reason.badGenerated');
   x.projectId = x.projectId ?? null;
   if (x.projectId !== null && !isId(x.projectId)) return fail('reason.badProjectLink');
+  // 0.6.0 (all optional; a bad value is dropped, never a reason to quarantine an old series):
+  if (x.kind !== 'event') delete x.kind;                                   // recurring EVENT; absent = recurring task
+  if (x.until !== undefined && x.until !== null && !isDateKey(x.until)) delete x.until; // last date (inclusive)
+  if (x.until === null) delete x.until;
+  if (!SERIES_MONTHLY_RULES.includes(x.monthBy)) delete x.monthBy;
+  if (x.endTime !== undefined && (x.kind !== 'event' || !isTime(x.endTime) || (x.time && x.endTime <= x.time))) delete x.endTime;
+  if (x.skip !== undefined) { x.skip = Array.isArray(x.skip) ? [...new Set(x.skip.filter(isDateKey))].sort() : []; if (!x.skip.length) delete x.skip; }
+  if (x.kind === 'event') { x.mode = 'fixed'; if (x.time === null) return fail('reason.badTaskTime'); } // an event needs a start time
   const s = stamps(x, now);
   return s ? fail(s) : { value: x };
 }

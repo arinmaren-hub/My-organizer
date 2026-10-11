@@ -1,3 +1,25 @@
+# Changelog
+
+## 0.6.0 — 2026-10-11 — Current work first, search, undo, repeats with end dates, quarterly tidy-up
+
+Built on the 0.5.2 recovery release, not rebuilt. **Same address, same storage keys, same installed app.** The data format moves from schema 4 to **5** (new optional fields only); your data is converted automatically after a full copy is kept (⚙ → «Копии и данные»). Older versions of the app will show newer data read-only.
+
+**What changed for you**
+- **Задачи** is now a view of current work: **Без даты** (always first, with a small «+» that opens a multi-line field; one line = one task), **На этой неделе** (Mon–Sun, grouped by day) and a folded **Позже**. Finished tasks and old weeks are no longer listed here; they stay in the Calendar and in Search, and unfinished old tasks still come back through «Хвосты».
+- **Поиск** (magnifier in the header of Задачи): type a word and find tasks and events of any month, finished or not, newest first. Tap a result: the Calendar opens on that day and the record is briefly highlighted (an undated task opens its editor).
+- **Повторы:** optional end date; **repeating events**; monthly rules «second Tuesday» / «last Friday»; deleting one occurrence of a repeating event skips it for good.
+- **Отменить:** a small bar for a few seconds after ticking/unticking, moving or deleting. It disappears if the record was changed meanwhile.
+- **Списки:** search inside an opened list (items and categories). **Подготовка к событию:** unfinished items above finished ones (display only).
+- **Очистка (раз в ~3 месяца):** a calm card on «Сегодня» — «Пора навести порядок?» (Save Backup / Review Old Records / Delete All Old Records / Remind Me in One Month). Nothing is ever deleted by itself; removal needs a saved backup and a final confirmation; unfinished work, future events, repeating rules, Home/Buy, templates and records marked «Хранить всегда» are never touched. ⚙ → «Очистка старых записей» opens the same screen at any time.
+
+**Safety:** search and the cleanup screen only read; the reminder state is per device and not part of backups; imports and migrations validate every new field; the upgrade keeps a rollback copy.
+
+**Not changed:** local-only storage, four tabs, ＋, ⚙, round checkboxes, quiet rows, long-press menus, indent gesture, planning day and End Day, Tails and evening review, Waiting for Others, conversions, Home → Buy, templates, language and theme, backups/import, offline operation. No text-size setting, no Projects tab, no drag-and-drop.
+
+**Also fixed:** the repository's `e2e-v5-test.py` had lost its final runner section; it is complete again.
+
+**Known limits:** see `TESTING.md` §3 and `DECISIONS.md` B14 (400-day horizon for repeating events; the app's own older safety copies still hold removed records until they rotate out; nothing was tested on a real iPhone/Safari).
+
 ## 0.5.2 — recovery from broken 0.5.1 (2026-10-10)
 
 - Uses Claude’s latest tested 0.5.0 code as the base, preserving the requested minimal UI.
@@ -6,7 +28,7 @@
 - No changes to stored-data schema or storage keys.
 - Browser verification on an iPhone/Safari remains required.
 
-# Changelog
+# (earlier versions)
 
 ## 0.5.0 — 2026-10-10 — Calm redesign: view first, edit only when asked
 

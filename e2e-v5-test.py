@@ -1,9 +1,9 @@
 import os
 """Browser tests for 0.5.0 (the calm redesign) (headless Chromium, iPhone-sized screen).
-Usage: python3 e2e-v4-test.py <app_folder> <output_folder>
+Usage: python3 e2e-v5-test.py <app_folder> <output_folder>
 Runs every flow twice (Russian, English); a contrast and layout audit runs in both
 languages and both themes. The clock of the page is fixed, so dates are exact.
-Prints one line per check and saves e2e-v4-results.json."""
+Prints one line per check and saves e2e-v5-results.json."""
 import functools, http.server, json, os, shutil, socketserver, sys, threading, traceback
 from playwright.sync_api import sync_playwright
 
@@ -204,7 +204,7 @@ with sync_playwright() as p:
         check(L + 'Нижняя панель: вкладок «Прогресс» и «Данные» нет', pg.locator('nav#nav [data-tab="projects"], nav#nav [data-tab="data"]').count() == 0)
         nb = pg.locator('nav#nav').bounding_box()
         check(L + 'Нижняя панель: прижата к низу экрана и компактна (≤ 70px)', abs(nb['y'] + nb['height'] - 844) < 1.5 and nb['height'] <= 70, str(nb))
-        check(L + 'Верхних больших кнопок навигации нет', pg.locator('header button:not(#more-btn):not(#back-btn)').count() == 0)
+        check(L + 'Верхних больших кнопок навигации нет', pg.locator('header button:not(#more-btn):not(#back-btn):not(#search-btn)').count() == 0)
         check(L + 'Сегодня: слева сверху день недели и плановая дата', pg.inner_text('#app-title') == S['weekday'] and pg.inner_text('#subtitle') == S['date'], pg.inner_text('#top'))
         check(L + 'Сегодня: справа сверху значок шестерёнки (не «···»)', pg.locator('#more-btn').is_visible() and pg.locator('#more-btn svg').count() == 1 and pg.locator('#more-btn svg circle').count() == 1 and pg.locator('#more-btn svg circle').first.get_attribute('r') == '3')
         check(L + 'Шестерёнка: подпись для скринридера', pg.get_attribute('#more-btn', 'aria-label') == S['gearLabel'], str(pg.get_attribute('#more-btn', 'aria-label')))
@@ -368,13 +368,13 @@ with sync_playwright() as p:
         s = Session(lang, data=d); pg = s.pg
         s.tab('tasks')
         heads = pg.locator('#main h2').all_inner_texts()
-        check(L + 'Задачи: три группы (по дням / по неделям / без даты)', len(heads) >= 3, str(heads))
+        check(L + 'Задачи: группы «Без даты» и «На этой неделе» (0.6.0)', len(heads) >= 2, str(heads))
         r = s.row('Позвонить маме')
         check(L + 'Строка: круглый чекбокс и название, без «···» и других кнопок', r.locator('input[type=checkbox]').count() == 1 and r.locator('.more').count() == 0 and r.locator('button').count() == 0)
         check(L + 'Строка: чекбокс круглый, разделительной линии между задачами нет', r.locator('input[type=checkbox]').evaluate("e => getComputedStyle(e).borderRadius") in ('50%', '12px') and r.evaluate("e => getComputedStyle(e).borderBottomWidth") == '0px')
         check(L + 'Строка: мелкая дата/срок под названием', 'до' in r.locator('.meta').inner_text() or '20' in r.locator('.meta').inner_text(), r.locator('.meta').inner_text())
         check(L + 'Строка: время видно у задачи со временем', '09:30' in s.row('Купить хлеб').inner_text())
-        check(L + 'Нет постоянных кнопок и форм в группах (кроме «···» и чекбоксов)', pg.locator('#main .group button:not(.more)').count() == 0 and pg.locator('#main .group input:not([type=checkbox])').count() == 0)
+        check(L + 'Нет постоянных кнопок и форм в группах (кроме «···» и чекбоксов)', pg.locator('#main .group button:not(.more):not(.h2-plus)').count() == 0 and pg.locator('#main .group input:not([type=checkbox])').count() == 0)
         # recurring at the bottom, folded
         last = pg.evaluate("() => { const f = document.querySelector('[data-fold=recurring]'); return !!f && !f.nextElementSibling && f.querySelector('.foldbody').hidden; }")
         check(L + 'Повторяющиеся: в самом низу и свёрнуты', last)
@@ -414,7 +414,8 @@ with sync_playwright() as p:
         pg.fill('#sheet-root input[name=date]', '2026-10-15'); pg.click('#sheet-root form[data-form="task.moveDate"] button')
         t1 = s.tasks('Позвонить бабушке')[0]
         check(L + 'Перенос на свою дату', t1['plan'] == {'kind': 'day', 'date': '2026-10-15'} and t1['deadline'] == '2026-10-20', str(t1['plan']))
-        # duplicate
+        # duplicate (a task planned for next week is under «Позже» since 0.6.0)
+        if pg.locator('[data-fold="later"] .foldbody').is_hidden(): pg.click('[data-fold="later"] .foldhead')
         n0 = len(s.tasks())
         s.menu_item('Позвонить бабушке', S['dup'])
         check(L + 'Дублировать: ровно одна копия', len(s.tasks()) == n0 + 1 and len(s.tasks('Позвонить бабушке')) == 2 and s.no_sheet())
@@ -513,7 +514,7 @@ with sync_playwright() as p:
         # management in ···
         pg.click('#more-btn'); s.wait_sheet()
         labs = [x.strip() for x in pg.locator('#sheet-root .menuitem').all_inner_texts()]
-        check(L + 'Меню «···» списка: переименовать, категории, шаблон, удалить', len(labs) == 4, str(labs))
+        check(L + 'Меню «···» списка: переименовать, категории, шаблон, удалить', len(labs) == 5, str(labs))
         pg.click('#sheet-root [data-action="sheet.rename"]'); s.wait_sheet()
         pg.fill('#sheet-root input[name=name]', 'Отпуск'); pg.click('#sheet-root button[type=submit]')
         check(L + 'Переименование', next(l for l in s.doc()['lists'] if l['id'] == 'l1')['name'] == 'Отпуск')
@@ -864,7 +865,7 @@ with sync_playwright() as p:
         pg.fill(f + ' input[name=interval]', '3'); pg.select_option(f + ' select[name=freq]', 'daily'); pg.select_option(f + ' select[name=mode]', 'completion')
         pg.fill(f + ' input[name=startDate]', '2026-10-30')
         pg.click(f + ' button[type=submit]')
-        pg.locator('#main .trow', has_text='Полить цветы').first.locator('input[type=checkbox]').check()
+        pg.locator('#main .trow', has_text='Полить цветы').first.locator('input[type=checkbox]').click()  # the done task leaves «Задачи» (0.6.0)
         o = sorted((x['occurrenceDate'], x['done']) for x in s.doc()['tasks'] if x['title'] == 'Полить цветы')
         check(L + 'Повтор по выполнению: следующий через 3 дня после выполнения (02.11)', o == [('2026-10-30', True), ('2026-11-02', False)], str(o))
         pg.click('[data-fold=recurring] .foldhead') if pg.locator('[data-fold=recurring] .foldbody').is_hidden() else None
@@ -950,7 +951,7 @@ with sync_playwright() as p:
         s = Session(lang, data=v4); pg = s.pg
         d = s.doc()
         keep = {k: d[k] for k in ('tasks', 'events', 'lists', 'templates', 'waiting')}
-        check(L + 'Данные 0.4.0 открываются без миграции схемы (по-прежнему формат 4, тот же dataId)', d['schemaVersion'] == 4 and d['dataId'] == 'e2e-org')
+        check(L + 'Данные 0.4.0 переходят на формат 5 (0.6.0), тот же dataId', d['schemaVersion'] == 5 and d['dataId'] == 'e2e-org')
         check(L + 'Ничего не потеряно: задачи, события, списки, шаблоны, ожидания идентичны', json.dumps(keep, sort_keys=True) == json.dumps({k: v4[k] for k in keep}, sort_keys=True))
         check(L + 'Свой список «Купить» цел и отдельный от созданного «Купить»', any(l['id'] == 'ol2' and l['name'] == 'Купить' for l in d['lists']) and not any(l.get('kind') == 'home' for l in d['lists']))
         s.tab('lists')
@@ -1092,12 +1093,13 @@ with sync_playwright() as p:
         # Tasks tab: inside the date group only
         s.tab('tasks')
         tick('Гамма')
-        grp = lambda: pg.locator('#main .group').first.locator('.trow .title').all_inner_texts()
-        check(L + 'Задачи: внутри даты выполненные внизу, другая дата не затронута', grp() == ['Бета', 'Дельта', 'Альфа', 'Гамма', 'Другой день'], str(grp()))
+        grp = lambda: pg.locator('.group.thisweek .trow .title').all_inner_texts()
+        check(L + 'Задачи (0.6.0): выполненные (Альфа, Гамма) здесь не показаны, остальные по порядку', grp() == ['Бета', 'Дельта'], str(grp()))
+        check(L + 'Задачи (0.6.0): другая дата не затронута', next(t for t in s.doc()['tasks'] if t['id'] == 'o')['plan']['date'] == '2026-10-12')
         check(L + 'Задачи: задача осталась в своей дате', next(t for t in s.doc()['tasks'] if t['id'] == 'c')['plan'] == {'kind': 'day', 'date': '2026-10-09'})
         tick('Без даты 1')
-        nd = pg.locator('#main .group').nth(2).locator('.trow .title').all_inner_texts()
-        check(L + 'Задачи: группа без даты — то же правило', nd == ['Без даты 2', 'Без даты 1'], str(nd))
+        nd = pg.locator('.group.nodate .trow .title').all_inner_texts()
+        check(L + 'Задачи (0.6.0): группа без даты — выполненная тоже ушла', nd == ['Без даты 2'], str(nd))
         s.tab('today')
         check(L + 'Сегодня и Задачи согласованы', today() == ['Бета', 'Дельта', 'Альфа', 'Гамма'], str(today()))
         # ordinary list
@@ -1116,7 +1118,7 @@ with sync_playwright() as p:
         if pg.locator('#sheet-root [data-fold=prep] .foldbody').is_hidden(): pg.locator('#sheet-root [data-fold=prep] .foldhead').click()
         pg.locator('#sheet-root .prow', has_text='Паспорт').locator('input[type=checkbox]').click()
         pr = pg.locator('#sheet-root .prow .title').all_inner_texts()
-        check(L + 'Подготовка к событию: порядок не меняется при отметке', pr == ['Паспорт', 'Билеты'], str(pr))
+        check(L + 'Подготовка к событию (0.6.0): выполненное внизу, невыполненное выше', pr == ['Билеты', 'Паспорт'], str(pr))
         s.close_sheet()
         # opening the actions menu without a visible button
         s.row('Бета').locator('.ttext').first.click(button='right'); s.wait_sheet()
@@ -1154,3 +1156,21 @@ with sync_playwright() as p:
         check(L + 'Правка пункта встроенного шаблона проходит сразу, копия одна', len(tp) == 1 and any(i['title'] == 'Мой пункт' for i in tp[0]['items']), str([x['base'] for x in s.doc()['templates']]))
         check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
         s.close()
+
+    # =============================================================== runner
+    for fn, langs in FLOWS:
+        if os.environ.get('ONLY') and os.environ['ONLY'] not in fn.__name__: continue
+        for args in ([(l,) for l in langs] if langs else [()]):
+            try:
+                fn(*args)
+            except Exception as e:
+                results.append((f'{fn.__name__}{args} — ИСКЛЮЧЕНИЕ', False, str(e).splitlines()[0]))
+                traceback.print_exc()
+    browser.close()
+
+passed = sum(1 for _, ok, _ in results if ok)
+print(f'E2E-V5: {passed}/{len(results)} checks passed')
+for name, ok, detail in results:
+    print(('  ✓ ' if ok else '  ✗ ') + name + (f'  — {detail}' if detail and not ok else ''))
+json.dump([{'name': n, 'ok': o, 'detail': d} for n, o, d in results], open(os.path.join(OUT, 'e2e-v5-results.json'), 'w'), ensure_ascii=False, indent=1)
+sys.exit(0 if passed == len(results) else 1)

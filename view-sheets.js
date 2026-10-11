@@ -9,11 +9,13 @@ import { isoWeekday } from './dates.js';
 import { ICONS } from './icons.js';
 import { editTaskForm, editEventForm, foldBlock } from './components.js';
 import { seriesEditForm, ruleFields } from './view-tasks.js';
-import { activeProjects } from './selectors.js';
+import { activeProjects, doneLast } from './selectors.js';
 import { listTemplates, categoriesOf, missingBuiltins } from './templates.js';
 import { stockOf, STOCK_ORDER } from './home.js';
 import { getContainer } from './view-lists.js';
 import { MODES } from './appearance.js';
+import { searchBody } from './view-search.js';
+import { confirmBody } from './view-cleanup.js';
 import { taskConversionLosses, eventConversionLosses } from './actions.js';
 
 const alive = r => !r.deletedAt;
@@ -40,7 +42,7 @@ const segBtn = (action, mode, current, label) =>
 
 function appMenu(doc, ctx) {
   const rows = [item('go', t('menu.evening'), 'data-tab="evening"'), item('go', t('tab.settings'), 'data-tab="settings"'),
-    item('go', t('menu.data'), 'data-tab="data"')];
+    item('go', t('menu.data'), 'data-tab="data"'), item('cleanup.start', t('menu.cleanup'), 'data-mode="home"')];
   if (activeProjects(doc).length) rows.push(item('go', t('tab.projects'), 'data-tab="projects"'));
   rows.push(item('go', t('menu.about'), 'data-tab="about"'));
   rows.push(ctx.finishedEarly ? item('day.undoFinish', t('day.undoFinish')) : item('day.finish', t('day.finish')));
@@ -73,6 +75,9 @@ function quickSheet(doc, ctx, s) {
 
 // ---------- row menus ----------
 
+// «Хранить всегда» / «Не хранить всегда»: a record marked this way is never offered for cleanup.
+const keepItem = (coll, r) => item('keep.toggle', t(r.keep ? 'cleanup.unkeep' : 'cleanup.keepForever'), `data-coll="${coll}" ${idAttr(r.id)} data-on="${r.keep ? '' : '1'}"`);
+
 function taskMenu(doc, ctx, s) {
   const task = find(doc.tasks, s.id);
   if (!task) return '';
@@ -80,6 +85,7 @@ function taskMenu(doc, ctx, s) {
   rows.push(item('edit.open', t('btn.edit'), `data-kind="task" ${idAttr(task.id)}`), item('sheet.move', t('menu.move'), idAttr(task.id)),
     item('task.duplicate', t('menu.duplicate'), idAttr(task.id)), item('task.toWaiting', t('menu.toWaiting'), idAttr(task.id)));
   if (!task.seriesId) rows.push(item('convert.open', t('menu.toEvent'), `data-from="task" ${idAttr(task.id)}`));
+  if (task.done && !task.seriesId) rows.push(keepItem('tasks', task));
   rows.push(item('task.delete', t('btn.delete'), idAttr(task.id), 'danger'));
   return sheet(task.title, menu(rows));
 }
@@ -88,7 +94,7 @@ function eventMenu(doc, ctx, s) {
   const e = find(doc.events, s.id);
   if (!e) return '';
   return sheet(e.title, menu([item('event.open', t('menu.open'), idAttr(e.id)), item('edit.open', t('btn.edit'), `data-kind="event" ${idAttr(e.id)}`),
-    item('convert.open', t('menu.toTask'), `data-from="event" ${idAttr(e.id)}`), item('event.delete', t('btn.delete'), idAttr(e.id), 'danger')]));
+    item('convert.open', t('menu.toTask'), `data-from="event" ${idAttr(e.id)}`), ...(e.seriesId ? [] : [keepItem('events', e)]), item('event.delete', t('btn.delete'), idAttr(e.id), 'danger')]));
 }
 
 function waitMenu(doc, ctx, s) {
@@ -185,7 +191,7 @@ function prepBlock(e) {
   const items = Array.isArray(e.prep) ? e.prep.filter(alive) : null;
   if (items === null) return `<button type="button" class="linkrow" data-action="prep.create" ${idAttr(e.id)}><span class="grow">${esc(t('prep.add'))}</span>${ICONS.plus}</button>`;
   const done = items.filter(i => i.done).length;
-  const rows = items.map(i => `<div class="row prow${i.done ? ' is-done' : ''}">
+  const rows = doneLast(items).map(i => `<div class="row prow${i.done ? ' is-done' : ''}">
       <input type="checkbox" data-action="prep.toggle" data-event="${esc(e.id)}" data-id="${esc(i.id)}" ${i.done ? 'checked' : ''} aria-label="${esc(t('aria.done'))}">
       <div class="grow ttext" data-action="prep.edit" data-event="${esc(e.id)}" data-id="${esc(i.id)}" role="button" tabindex="0"><div class="title">${esc(i.title)}</div></div></div>`).join('');
   const form = `<form class="line" data-form="prep.add" data-event="${esc(e.id)}" autocomplete="off">
@@ -315,7 +321,7 @@ function listMenu(doc, ctx, s) {
   if (!c) return '';
   const a = `data-coll="${esc(s.coll)}" ${idAttr(c.id)}`;
   const rows = [item('sheet.rename', t('lists.renameList'), a), item('sheet.cats', t('lists.categories'), a)];
-  if (s.coll === 'lists') rows.push(item('list.saveTemplate', t('lists.saveAsTemplate'), idAttr(c.id)));
+  if (s.coll === 'lists') rows.push(item('list.saveTemplate', t('lists.saveAsTemplate'), idAttr(c.id)), keepItem('lists', c));
   rows.push(item(s.coll === 'lists' ? 'list.delete' : 'tpl.delete', t('btn.delete'), idAttr(c.id), 'danger'));
   return sheet(c.name, menu(rows));
 }
@@ -349,10 +355,25 @@ function tplMenu(doc, ctx, s) {
     item('tpl.delete', t('btn.delete'), idAttr(tpl.id), 'danger')]));
 }
 
+function noDateSheet(doc, ctx, s) {
+  return sheet(t('tasks.noDateAdd'), `<form data-form="nodate.add" autocomplete="off">
+    <textarea name="text" rows="4" data-focus placeholder="${esc(t('tasks.noDatePh'))}" aria-label="${esc(t('tasks.noDateAdd'))}">${esc(s.text || '')}</textarea>
+    <div class="line"><button type="submit" class="primary">${esc(t('btn.add'))}</button></div></form>`, 'sheet-quick');
+}
+
+function cleanConfirmSheet(doc, ctx, s) {
+  const body = ctx.ui.cleanup ? confirmBody(doc, ctx, s) : null;
+  return body ? sheet(t('cleanup.confirmTitle'), body) : '';
+}
+
+function searchSheet(doc, ctx, s) {
+  return sheet(t('search.title'), searchBody(doc, s), 'sheet-tall');
+}
+
 function seriesNewSheet(doc, ctx) {
   return sheet(t('recur.add'), `<form data-form="series.add" autocomplete="off">
     <label class="field"><span>${esc(t('recur.name'))}</span><input name="title" required data-focus class="grow"></label>
-    ${ruleFields(null, ctx.today)}
+    ${ruleFields(null, ctx.today, { withKind: true })}
     <div class="line"><button type="submit" class="primary">${esc(t('recur.add'))}</button></div></form>`);
 }
 
@@ -360,7 +381,7 @@ const SHEETS = {
   appmenu: appMenu, quick: quickSheet, taskmenu: taskMenu, eventmenu: eventMenu, waitmenu: waitMenu, seriesmenu: seriesMenu,
   move: moveSheet, pick: pickSheet, edit: editSheet, event: eventSheet, prepedit: prepEditSheet, convert: convertSheet,
   waitadd: waitAddSheet, newlist: newListSheet, newtpl: newTemplateSheet, additems: addItemsSheet, addhome: addHomeSheet,
-  seriesnew: seriesNewSheet, stock: stockSheet, listmenu: listMenu, rename: renameSheet, cats: catsSheet, tplmenu: tplMenu
+  seriesnew: seriesNewSheet, search: searchSheet, cleanconfirm: cleanConfirmSheet, nodate: noDateSheet, stock: stockSheet, listmenu: listMenu, rename: renameSheet, cats: catsSheet, tplmenu: tplMenu
 };
 
 export function renderSheet(doc, ctx) {

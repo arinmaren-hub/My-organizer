@@ -10,6 +10,7 @@ import { dayWindow } from './planday.js';
 import { morningReview, unconfirmedOccurrences, tasksForDay, tasksForWeek, eventsInWindow, doneLast } from './selectors.js';
 import { taskRow, tailRow, eventRow, empty, foldBlock } from './components.js';
 import { renderWaitingDue, renderWaitingSection } from './view-waiting.js';
+import { cleanupCard } from './view-cleanup.js';
 import { ICONS } from './icons.js';
 
 // Repeats waiting for the person to say what happened (never assumed missed).
@@ -53,6 +54,7 @@ export function renderToday(doc, ctx) {
   if (backupNote) {
     h += `<div class="chip line"><span class="grow">${esc(backupNote)}</span><button type="button" class="quiet" data-action="backup.export">${esc(t('btn.saveBackup'))}</button></div>`;
   }
+  if (ctx.cleanupDue) h += cleanupCard();
   const evRows = events.map(e => eventRow(e, e.start.slice(0, 10) === today ? e.start.slice(11) : `${e.start.slice(11)} · ${t('day.calendarNow', { day: { $day: e.start.slice(0, 10) } })}`)).join('');
   h += `<section class="list" id="today-list">${evRows}${taskList(tasks)}${!events.length && !tasks.length ? empty(t('today.empty')) : ''}</section>`;
   h += renderWaitingDue(doc, today);

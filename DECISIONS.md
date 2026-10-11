@@ -75,7 +75,7 @@ Items marked *(proposal — confirm)* below are design choices made by Claude th
 - Readability rule: every text/background colour pair has a contrast ratio of at least **4.5:1** in both themes (checked automatically on every screen). Native controls (date and time pickers, selects, checkboxes) follow the theme via `color-scheme`.
 - Limits: confirmation dialogs («Удалить?» etc.) are drawn by iOS and always follow the iPhone's own setting. The launch screen and status bar of the installed app are controlled by iOS; check them on the device.
 
-## B3. Quarterly Cleanup — «Уборка» (confirmed future feature, not built yet)
+## B3. Quarterly Cleanup — «Уборка» (earlier design — SUPERSEDED by the owner's 0.6.0 specification, see B14)
 
 **Goal.** Every three months, offer to review and remove old records that are no longer useful, so the organizer stays uncluttered. Saving storage space is not the goal. **Nothing is ever deleted without the user's explicit approval.**
 
@@ -303,6 +303,28 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 14. **Language.** Russian is the primary design language (all layouts tuned in Russian first); English uses the same components and the same central dictionaries (no language-specific screens) and was re-checked for overflow, navigation, forms and workflows at 390 px and 320 px. The language is chosen by hand and never taken from the device.
 15. **Not done / not decided.** Real iPhone/Safari testing; keyboard handling is implemented with `visualViewport` and only simulated; no drag reordering by design; restore of nested items; linking an event and the task made from it; an end date for events.
 
+## B14. What 0.6.0 built (owner's specification of 2026-10-11) — decisions and deviations
+
+Built on the 0.5.2 recovery release (= the 0.5.0 code plus the repaired service worker); nothing was rebuilt. Same address, same storage keys, same installed app.
+
+**Data format: schema 4 → 5.** The only reason is safety: 0.6.0 stores recurring *event* series and a few optional fields. An older app that opened such data would not understand it, so the version number is raised and older apps become read-only on it (rule R-future). The upgrade is automatic and keeps a full rollback copy («перед обновлением формата данных») first, like every earlier migration. Nothing is rewritten: all new fields are optional and absent in old records.
+
+**Tasks screen.** «Без даты» (always first; small «+» opens a one-field multi-line sheet; each non-empty line is a task with `plan.kind = 'none'`) → «На этой неделе» (unfinished tasks of the planning day's Monday–Sunday week, grouped by date; week-planned tasks without a weekday under their own small heading) → «Позже» (folded; later days and weeks in order) → recurring rules (folded, as before). Finished tasks and unfinished tasks of earlier weeks do not appear here; the latter stay in the morning/evening review («Хвосты») exactly as before. Unconfirmed past occurrences of recurring tasks are not listed either (they have their own card on «Сегодня»). Earlier days of the *current* week that are still unfinished are shown (the section is the whole Monday–Sunday week); they also remain in «Хвосты». Nothing is moved, rescheduled or deleted by showing or hiding.
+
+**Search.** Pure read-only function over the document (`search.js`); every word typed must occur in the title (case-insensitive, «ё» = «е»); tasks (open, done, undated, occurrences) and events (all dates, occurrences); deleted records and skipped occurrences are left out; newest date first, undated last, events before tasks on one date. A dated result opens the Calendar on that date and marks the exact record for ~2.5 s; a week-planned task opens the week fold; an undated task opens its editor. No index is built or stored.
+
+**Calendar as history.** The Calendar already showed every record on its own date (finished tasks stay on their day, past events stay). No saved date is changed to produce the new Tasks screen. The only change: a repeating-event preview for a future day looks at events, not tasks, when deciding whether the occurrence exists.
+
+**Recurrence.** Added to the series record (all optional): `until` (inclusive end date; works for both rhythms), `monthBy` (`'nth'` = same weekday as the start date's n-th, e.g. 2nd Tuesday; `'last'` = last such weekday; a 5th weekday that a month lacks falls back to the last one), `kind: 'event'` (+ `endTime`, `skip[]`). A repeating **event** is a series whose occurrences are ordinary event records (`seriesId` + `occurrenceDate`, the pair unique, deleted ones still count), made for the next 400 days from today and never in the past — so Calendar, Today, evening summary and search work unchanged. Limitation: the horizon moves forward every time the app is opened/day changes; an event further than 400 days away appears later. Deleting one occurrence adds its date to `skip`; restoring removes it. Changing the rule recreates only *untouched* future occurrences; edited ones stay. Deleting a series removes untouched future occurrences, keeps past ones and edited ones (as deleted records). Occurrences of a repeating event cannot be converted to a task. Ending a rule (`until`) never deletes records already made. Old series (no new fields) behave exactly as before.
+
+**Undo.** One in-memory entry and a small bar for 7 seconds: tick/untick, move to a date, delete of a task/event/list item. The entry stores the values before the action and a fingerprint of the record after it; Undo is offered only while the record is still exactly that — any later change (even by the person in the editor) removes the bar, so a newer action is never overwritten. Un-ticking a recurring task's completion uses the existing rule (the untouched successor disappears). «Удалённые» is untouched.
+
+**Ordinary lists.** A discreet magnifier in the header of an opened ordinary list searches item titles and category names. Multi-line adding (one line per item) already existed and is unchanged. Event preparation shows unfinished items above finished ones (display only; stored order untouched).
+
+**Quarterly cleanup (replaces B3).** Per-device reminder state (`organizer:device` → `cleanup: { baseline, lastReview, remindAt }`, never in the data or backups). `baseline` = the first day 0.6.0 ran on the device, so nobody is asked on update day. Due when today ≥ (lastReview or baseline) + 90 days and not before `remindAt`. «Remind me in one month» sets `remindAt = today + 30`; «Keep everything» sets `lastReview = today`; a finished removal also sets `lastReview`. The card on «Сегодня» is not modal and nothing runs automatically. **Eligible:** finished tasks whose completion day (else planned day) is before today − 90 days; events whose last day is before the cut-off; ordinary lists that are non-empty, with every live item finished and untouched since before the cut-off; deleted records past the existing 30-day retention (normally already gone). **Never:** unfinished tasks, future events, anything belonging to a recurring series (occurrences of tasks and events), Home and Buy, templates, lists with unfinished/no items, records with `keep: true` («Хранить всегда», set from the row menu or the review screen), settings, series, backups. Ambiguous age → excluded. **Safeguards:** the cleanup screen needs an external JSON backup saved at most 30 minutes before the screen was opened or at any time after (the normal «Сохранить копию»; so saving it on the reminder card first counts); after a removal the next one needs a new backup; the final sheet shows exact totals by type and the cut-off date, says the removed history disappears from Calendar and Search, needs a ticked confirmation, and the removal re-checks eligibility on the data itself, so a stale selection can never remove something that has since become protected. Removal is a real removal (the records are spliced out of the document, nothing is kept internally), so space is genuinely freed in the main data. **Limitation, stated honestly:** the app's own safety copies (up to 5 daily copies and the rollback copies) were made *before* the cleanup and still contain the removed records until they rotate out; the app does not delete those copies automatically. The size line is an estimate from the JSON length.
+
+**Not done / decided against.** No new data for «Keep forever» on series occurrences; no cleanup of waiting items or projects; no per-record "age" UI; no automatic anything. The text-size setting, Projects tab, drag-and-drop, accounts, AI were not touched.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure
@@ -402,9 +424,9 @@ The deadline never changes (decision 6). Nothing moves without a tap. «Всё �
 
 ---
 
-## D. Data model (schema version 4)
+## D. Data model (schema version 5)
 
-Document: `{ schemaVersion: 4, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, settings, quarantine }`
+Document: `{ schemaVersion: 5, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, settings, quarantine }`
 
 Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `settings.day` and `dataId`), 4 = 0.4.0 (adds the collections `series`, `waiting`, `templates`; task fields `review`, `seriesId`, `occurrenceDate`, `skipped`, `doneDay`; optional list `categories` and item `category`). Every upgrade only ADDS fields with empty defaults; no existing value is changed.
 
@@ -442,6 +464,8 @@ Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `
 **Template** (`templates`): `id, name, base (id of the built-in it overrides, or null), items [{ id, title, category }], categories [names], createdAt, updatedAt, deletedAt`. Built-in templates live in code (`i18n-v4.js`); a record with `base` is the person's edited copy of a built-in, or (with `deletedAt`) a marker that it was deleted. Markers are never purged.
 
 **Added in 0.5.0 (all optional, schema stays 4, validated leniently — a wrong value is dropped, the record is kept):** task `indent` (`true` or absent); list `kind` (`'home'` only, the home inventory) and list-item `stock` (`'have'│'low'│'out'`); event `prep` (absent, or an array of items `{ id, title, done, createdAt, updatedAt, deletedAt }`; absent = no preparation created). 0.4.0 code that opens such data keeps these fields (tested).
+
+**Added in 0.6.0 (schema 5; all optional and validated leniently — a wrong value is dropped, the record is kept):** series `until` (date), `monthBy` (`'nth'│'last'`), `kind` (`'event'` only), `endTime` (`'HH:MM'`, events only), `skip` (sorted date list); event `seriesId`/`occurrenceDate` (both or neither); task, event and list `keep` (`true` or absent).
 
 **Quarantine entry:** `{ at, source: 'load'│'import'│'legacy'│…, collection, parentId, reason, record }`.
 

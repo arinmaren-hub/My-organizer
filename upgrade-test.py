@@ -24,7 +24,7 @@ shutil.rmtree(SITE, ignore_errors=True)
 shutil.copytree(OLD, SITE)
 ver = lambda d: re.search(r"APP_VERSION = '([^']+)'", open(os.path.join(d, 'version.js'), encoding='utf-8').read()).group(1)
 OLD_V, NEW_V = ver(OLD), ver(NEW)
-SAME = OLD_V >= '0.4'   # 0.4.0 → 0.5.0: same data format (schema 4), so no migration, no «before migration» copy and no read-only window
+SAME = False   # 0.6.0 moved the data format from schema 4 to 5: every older version is a migration (copy «before migration», old windows become read-only)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -113,6 +113,36 @@ with sync_playwright() as p:
         if q.locator('[data-action="onboarding.skip"]').count():      # 0.3.0 asks about the day first
             q.click('[data-action="onboarding.skip"]')
             q.wait_for_selector('nav button')
+        if OLD_V >= '0.5':                                             # 0.5.x: four tabs, «＋» sheets, ⚙ menu
+            q.click('#fab'); q.wait_for_selector('#sheet-root textarea[name=text]')
+            q.fill('#sheet-root textarea[name=text]', f'{tag}-добавлена в {OLD_V}')
+            q.click('#sheet-root form[data-form="task.quickAdd"] button[type=submit]')   # first change today → daily copy
+            q.click('nav [data-tab="tasks"]')
+            q.locator('.row:has-text("личная задача 1 ") input[type=checkbox]').first.check()
+            q.click('nav [data-tab="lists"]')
+            q.locator('.indexrow').nth(2).click(); q.wait_for_selector('#main .irow, #main .empty, #main')
+            q.click('#fab'); q.wait_for_selector('#sheet-root textarea[name=text]')
+            q.fill('#sheet-root textarea[name=text]', f'{tag}-новый пункт')
+            q.click('#sheet-root form[data-form="items.add"] button[type=submit]')
+            q.click('#back-btn')
+            q.click('#more-btn'); q.wait_for_selector('#sheet-root .sheet')
+            q.click('#sheet-root [data-action="go"][data-tab="data"]')
+            with q.expect_download() as dl:
+                q.click('main button[data-action="backup.export"]')            # export → last backup date
+            path = os.path.join(OUT, f'backup-{tag}-{OLD_V}.json')
+            dl.value.save_as(path)
+            data = json.load(open(path, encoding='utf-8'))
+            data['data']['tasks'].append(dict(data['data']['tasks'][0], id=f'{tag}-from-import', title=f'{tag}-из импорта'))
+            mod = os.path.join(OUT, f'backup-{tag}-mod.json')
+            json.dump(data, open(mod, 'w', encoding='utf-8'), ensure_ascii=False)
+            q.set_input_files('input[data-action="import.file"]', mod)
+            q.wait_for_selector('button[data-action="import.apply"]', timeout=5000)
+            q.click('button[data-action="import.apply"]')                       # import → 'before-import' copy
+            q.click('button[data-action="snapshot.restore"] >> nth=0')          # restore → 'before-restore' copy
+            q.click('#back-btn'); q.click('nav [data-tab="tasks"]')
+            q.locator('.row:has-text("личная задача 2 ") .ttext').first.click(button='right'); q.wait_for_selector('#sheet-root .menuitem')
+            q.click('#sheet-root [data-action="task.delete"]')                  # soft delete
+            return path
         q.fill('form[data-form="task.quickAdd"] textarea', f'{tag}-добавлена в {OLD_V}')
         q.click('form[data-form="task.quickAdd"] button[type=submit]')       # first change today → daily copy
         tab(2)
@@ -194,7 +224,7 @@ with sync_playwright() as p:
             before, after = P['before'], P['after']
             old_raw = before['organizer:data']
             old, new = json.loads(old_raw), json.loads(after['organizer:data'])
-            check(f'{tag}: работает новая версия {NEW_V}, формат данных 4', P['page'].evaluate("import('./version.js').then(m => m.APP_VERSION)") == NEW_V and new['schemaVersion'] == 4)
+            check(f'{tag}: работает новая версия {NEW_V}, формат данных 5', P['page'].evaluate("import('./version.js').then(m => m.APP_VERSION)") == NEW_V and new['schemaVersion'] == 5)
             for k, v in records(old).items():
                 check(f'{tag}: {k} — каждая запись и каждое поле без изменений ({len(v)} шт.)', records(new)[k] == records(old)[k])
             check(f'{tag}: настройки вечерней сводки и даты документа сохранены',
@@ -230,8 +260,13 @@ with sync_playwright() as p:
         w = people['A']['old_window']
         disk = w.evaluate("localStorage.getItem('organizer:data')")
         w.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'organizer:data' }))")
-        w.fill('form[data-form="task.quickAdd"] textarea', 'из старого окна')
-        w.click('form[data-form="task.quickAdd"] button[type=submit]')
+        if OLD_V >= '0.5':
+            # the old window noticed the newer data and went read-only: its «＋» is gone, so nothing can be typed in
+            w.wait_for_timeout(300)
+            check('Старое окно: кнопка «＋» скрыта (только чтение)', not w.locator('#fab').is_visible())
+        else:
+            w.fill('form[data-form="task.quickAdd"] textarea', 'из старого окна')
+            w.click('form[data-form="task.quickAdd"] button[type=submit]')
         if SAME:
             after_w = json.loads(w.evaluate("localStorage.getItem('organizer:data')"))
             before_w = json.loads(disk)

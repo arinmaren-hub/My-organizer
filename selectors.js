@@ -177,3 +177,32 @@ export function eveningPreviewDue(settings, now, lastShownFor, cutoff = '00:00',
 export function eventsInWindow(doc, { start, end }) {
   return activeEvents(doc).filter(e => e.start >= start && e.start < end);
 }
+
+// ---------- «Задачи» screen (0.6.0) ----------
+// Current and upcoming work only: no date / this calendar week (Monday–Sunday) / later. Finished tasks and
+// tasks of earlier days are not shown here (finished ones live on in the Calendar and Search; unfinished
+// ones come back through the morning and evening review). Nothing is changed or stored.
+export function tasksScreen(doc, today) {
+  const wk = weekKey(today), sunday = addDays(wk, 6);
+  const open = activeTasks(doc).filter(t => !t.done && !isUnconfirmed(t, today));
+  const none = open.filter(t => t.plan.kind === 'none');
+  const days = new Map(), noDay = [];
+  const later = new Map();
+  const add = (map, key, kind, task) => { const k = `${key}|${kind}`; if (!map.has(k)) map.set(k, { key, kind, date: key, tasks: [] }); map.get(k).tasks.push(task); };
+  for (const t of open) {
+    if (t.plan.kind === 'day') {
+      if (t.plan.date >= wk && t.plan.date <= sunday) add(days, t.plan.date, 'day', t);
+      else if (t.plan.date > sunday) add(later, t.plan.date, 'day', t);
+    } else if (t.plan.kind === 'week') {
+      if (t.plan.date === wk) noDay.push(t);
+      else if (t.plan.date > wk) add(later, t.plan.date, 'week', t);
+    }
+  }
+  const byKey = (a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === 'week' ? -1 : 1);
+  return {
+    none,
+    week: { days: [...days.values()].sort(byKey), noDay },
+    later: [...later.values()].sort(byKey),
+    laterCount: [...later.values()].reduce((n, g) => n + g.tasks.length, 0)
+  };
+}

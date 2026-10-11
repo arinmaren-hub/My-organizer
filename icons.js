@@ -8,6 +8,7 @@ export const ICONS = {
   calendar: svg('<rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'),
   tasks: svg('<path d="M9 7h11M9 12h11M9 17h11"/><path d="M4 7l1 1 2-2M4 12l1 1 2-2M4 17l1 1 2-2"/>'),
   lists: svg('<path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="5" cy="6.5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="17.5" r="1"/>'),
+  search: svg('<circle cx="10.5" cy="10.5" r="5.5"/><path d="M15 15l5 5"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   more: svg('<circle cx="5.5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18.5" cy="12" r="1.2" fill="currentColor"/>'),
   gear: svg('<circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.4 2.2 2.6-.5.9 2.5 2.5.9-.5 2.6L21.1 12l-2.2 1.4.5 2.6-2.5.9-.9 2.5-2.6-.5L12 21.2l-1.4-2.2-2.6.5-.9-2.5-2.5-.9.5-2.6L2.9 12l2.2-1.4-.5-2.6 2.5-.9.9-2.5 2.6.5z"/>'),

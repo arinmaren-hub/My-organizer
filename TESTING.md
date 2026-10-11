@@ -1,31 +1,34 @@
-# TESTING.md — version 0.5.0
+# TESTING.md — version 0.6.0
 
-## 1. What was actually tested (2026-10-10, by Claude)
+## 1. What was actually tested (2026-10-11, by Claude)
 
-**Environment:** headless **Chromium 141.0.7390.37** driven by **Playwright 1.56.0** on Linux, iPhone-sized screen (390 × 844, touch), served over local http; a simulated clock where dates matter. **Only Chromium. No WebKit, no Safari, no real iPhone or iPad.** Swipe, long-press, keyboard and safe-area behaviour were simulated with pointer events and viewport changes, not felt on a device.
+**Environment:** headless **Chromium 141** driven by **Playwright 1.56** on Linux, iPhone-sized screen (390 × 844, touch; 320 px for a narrow check), local http server, simulated clock where dates matter. **Only Chromium. No WebKit, no Safari, no real iPhone or iPad.** Swipe, long-press, keyboard and safe-area behaviour were simulated, not felt on a device.
 
-Results are from the final code (after the last change to `sw.js`):
+Results are from the final code, in one run after the last code change:
 
 | Test set | Result | Notes |
 |---|---|---|
-| `tests.html` — unit tests | **308 / 308 passed** in each of four time zones | UTC, America/Los_Angeles, Asia/Tokyo, Pacific/Kiritimati (UTC+14). 57 new tests for 0.5.0 (quick entry rules, indent, home inventory, templates, conversion, prep list, review fixes). Console lines like «Records would be lost while loading» during this run are the tests deliberately feeding broken data. |
-| `e2e-v5-test.py` — new click-through of the 0.5.0 interface | **721 / 721 passed** | Russian first, then the same flows in English. Four tabs, ⚙ menu, simplified rows, finished items sinking, Today layout, «＋» multi-line entry, row menus, reschedule, swipe indent, Lists index, Купить, Дом, list screens, templates, calendar, task↔event conversion, Подготовка, reviews, waiting, recurring, backups, language and theme switching, contrast audit. |
-| `e2e-test.py` — legacy scenario | **125 / 125 passed** | Ported to the 0.5.0 navigation. Includes the «Обновление версии» step. |
-| `privacy-test.py` — two independent browser contexts | **38 / 38 passed** | Server saw only `GET` requests for the app's own files. |
-| `upgrade-test.py` — real service-worker update | **47 / 47** (0.2.0), **47 / 47** (0.2.1), **47 / 47** (0.2.2), **46 / 46** (0.3.0), **45 / 45** (0.4.0) → 0.5.0 | Two people upgraded side by side from the real old builds. |
-| `e2e-v4-test.py` | **obsolete, not run** | Describes the 0.4.0 screens; its flows are covered by `e2e-v5-test.py`. Kept only for history. |
+| `tests.html` unit tests | **340 / 340** in each of five time zones | UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Auckland, Europe/Athens. About 32 new tests for 0.6.0: search, week boundaries, recurrence (end date, nth weekday, last, skip, event series), undo guards, cleanup eligibility/protection/removal, schema 5, RU/EN key parity. |
+| `e2e-v6-test.py` — new 0.6.0 click-through | **350 / 350** | Real browser. Tasks screen (No Date, This Week, Later), week boundaries on Sunday/Monday, «+» multi-line, search and highlight, Calendar history, undo (tick, move, delete, list item, event item), recurring events and old series, list search and multi-add, cleanup reminder / review / grace / bulk / keep, persistence after reload, offline, Russian and English × light and dark contrast audit, 320 px layout. |
+| `e2e-v5-test.py` — 0.5.x click-through (adapted to the new Tasks screen) | **723 / 723** | Expectations changed on purpose: schema 5, finished tasks leave Tasks, unfinished prep items first, 5-item list menu. |
+| `e2e-test.py` — legacy scenario | **125 / 125** | |
+| `privacy-test.py` | **38 / 38** | Server saw only `GET` requests for the app's own files. |
+| `upgrade-test.py` — real service-worker update, two people side by side | 0.2.0, 0.2.1, 0.2.2: **47 / 47**; 0.3.0: **46 / 46**; 0.4.0: **46 / 46**; 0.5.0: **47 / 47**; **0.5.2: 47 / 47** → 0.6.0 | Includes: records identical field by field, automatic pre-upgrade rollback copy (schema 4 → 5), an old window going read-only on newer data. |
 
-**Independent review (second round, 2026-10-10).** A separate agent that had not written the code reviewed the final changes (data preservation, task↔event conversion, Home inventory, lists/templates, service-worker updating) read-only and with small experiments. It found **no data-loss path**. Material findings and what was done:
-1. Restoring a deleted built-in template from «Удалённые» gave an empty template — **fixed** (content comes back; with a live copy the marker is dropped); 2 tests.
-2. «Сделать событием» silently dropped a task's reminder when the time was changed — **fixed** (listed, needs confirmation; unchanged time still carries it over); test.
-3. Renaming a «Дом» item to an existing name made a second row — **fixed**; test.
-4. Restoring the original after a task↔event conversion made two active records (owner's request) — **fixed** with linked records and an explicit confirmation (`DECISIONS.md` B12); 6 unit tests and a browser check in both languages.
-5. *Not changed (documented):* the service-worker install verifies `version.js` and that every file downloads, but not that each file is the new one; a site where `sw.js` and `version.js` are new but another file is a stale CDN copy could be cached as a mixed set until the next version bump (GitHub Pages publishes one commit atomically, so this needs a CDN inconsistency). Recovery: bump the version and re-upload. Also not changed: restoring a task that became «Ожидаю от других» while the waiting item is active gives both (nothing lost).
-The checks above are otherwise my own tests; earlier defects found while writing them (menu contrast, list not opening, template edits, reminder carry-over, waiting deadline, typed text lost on a failed save) each have a regression test.
+**Not run by me:** an independent reviewer agent (none was started); the final ZIP contents are re-checked after packing (see the delivery message).
 
-**Unzipped packages:** after packing, the unit tests (one time zone), privacy, legacy and the 0.4.0 upgrade were re-run on the unzipped full ZIP, and the changed-only ZIP laid over 0.4.0 was compared with it (identical); results in the delivery message.
+**Mistakes found by these tests and fixed before release** (each has a regression test): review checkboxes not selecting; disabled danger button failing contrast; monthly «n-th» select overflowing 390 px; cut-off date shown without a year; undo guard not detecting an unchanged-timestamp edit; Cyrillic regex in code; backup asked twice in a row on cleanup (30-minute grace added).
+
+**Known limits (also in DECISIONS B14 and SECURITY 4a):**
+- Repeating events are created ahead for **400 days**, never in the past; later occurrences appear as time passes.
+- After a confirmed cleanup, the app's older automatic daily/rollback copies on the same device still contain the removed records until they rotate out (5 days / latest 5). The external backup you saved is the full history.
+- Storage sizes in the cleanup screen are an **estimate**.
+- Cleanup never touches series occurrences, unfinished items, future events, Home/Buy, templates, or anything marked «Keep».
 
 ## 2. Migration test report (release rule R11)
+
+**0.6.0 adds schema 5** (new optional fields only; automatic rollback copy on migration). The table below was written for 0.5.0 and the same checks were re-run for 0.6.0 (see section 1: 0.2.0 → 0.5.2 all passed). Older apps open schema 5 data read-only.
+
 
 **Supported earlier versions:** prototype (schema 1, key `arina-organizer-v1`), 0.2.0, 0.2.1, 0.2.2 (schema 2), 0.3.0 and 0.4.0 (schema 3 and 4; 0.5.0 keeps schema 4 — the same data, same keys).
 
@@ -64,55 +67,40 @@ The checks above are otherwise my own tests; earlier defects found while writing
 - Add to Home Screen, the installed-app look, offline use and the update flow **on iOS**; the iOS share sheet for backups (download fallback tested); whether iOS grants persistent storage.
 - Hosting on **GitHub Pages** (a local server stood in for it), including CDN delay after upload.
 - **Time-based features on a real clock:** evening overview and day changes were tested with a simulated clock.
+- **Cleanup on a real device:** share sheet for the backup and the real storage savings (only Chromium simulated).
 - **Very large organizers** (thousands of tasks) — performance not measured.
 
 ## 4. Release gate (every version — `DECISIONS.md` E12)
 
 A version is **not published** unless every line is ticked:
 - [ ] `tests.html` all green (ideally also in a second time zone).
-- [ ] `e2e-test.py` and `e2e-v5-test.py` all passed.
+- [ ] `e2e-test.py` and `e2e-v5-test.py` and `e2e-v6-test.py` all passed.
 - [ ] `privacy-test.py` all passed (two independent browser contexts).
 - [ ] `upgrade-test.py` all passed **from every supported earlier version** (keep a copy of each released ZIP for this).
 - [ ] Section 2 updated: migration report and remaining data-loss risks.
 - [ ] `version.js` and `sw.js` versions equal; `CHANGELOG.md` updated; `DECISIONS.md` / `SECURITY.md` updated if a rule changed.
 - [ ] If any migration or isolation check fails: **stop**, do not publish.
 
-## 5. On the iPhone
+## 5. On the iPhone (manual — NOT done by me)
 
-**Before updating to 0.5.0:** «Данные → Сохранить копию» and keep the file outside the app (see README).
+**Before updating to 0.6.0:** «Данные → Сохранить копию» and keep the file outside the app.
 
-**After updating (about 20 minutes).**
-- [ ] `https://…/tests.html` in Safari: «308 из 308 тестов пройдено».
-- [ ] In the app: «Доступна новая версия» → «Обновить». All tasks, events, lists, projects are still there. ⚙ → «Копии и данные» shows the new version number.
-- [ ] **Bottom bar:** exactly four tabs — Сегодня, Календарь, Задачи, Списки. Not hidden behind the home indicator.
-- [ ] **The ⚙ gear in the header** opens the menu (Копии и данные, Настройки, …); the bottom bar and content do not jump. Inside a list the header shows «···» (the list's own menu).
-- [ ] **Сегодня:** the checklist on top; «Хвосты» folded; «Вечер» link; «Ожидаю от других» at the bottom; the backup chip appears only when a copy is due.
-- [ ] **«＋» quick entry:** open it, the keyboard appears and the text field stays visible above it. Type two lines («купить молоко завтра» and «позвонить маме»); both are added; the dates match the message.
-- [ ] **A task row:** round checkbox, title, small date/time; no «···» and no divider lines. Tap the checkbox: the task goes below the unfinished ones, muted and struck through; tap again: it returns to its place. **Long press** the row: Перенести, Изменить, Сделать событием, Удалить («Удалить» readable in light and dark). Tap the title, then «Действия»: the same menu. The long press must not tick the box and must not scroll.
-- [ ] **Finished items sink** in Сегодня, Задачи (inside each date) and an ordinary list in Списки; close and reopen the app: same order. The event «Подготовка» list keeps its order when you tick an item.
-- [ ] **Перенести** a task that has a deadline: the deadline stays.
-- [ ] **Swipe a row right** to indent it once, left to remove the indent; the page does not scroll sideways; a long press opens the row menu and does not tick the box.
-- [ ] **Списки:** the index shows «Купить» and «Дом»; open «Дом», cycle an item through its three states; open a list with categories, fold/unfold one; add an item with the keyboard open.
-- [ ] **Templates:** new list from «Супермаркет»; tick two items; the template still shows them unticked.
-- [ ] **Календарь:** the compact month; tap a day; add a task and an event; the dots show.
-- [ ] **Conversion:** task → event and back; the confirmation names what is lost.
-- [ ] **Подготовка** in an event: add two items, tick one, delete one (asks first).
-- [ ] **Recurring** (at the bottom of «Задачи»): add «Полить цветы» every 3 days; tick it, the next one appears.
-- [ ] **Языки и темы:** «Настройки» → English: every screen English; back to Русский. Dark theme: nothing unreadable. The language does not change when the iPhone language changes.
-- [ ] Airplane Mode on, close and reopen the app: it opens with your data. Airplane Mode off.
-- [ ] Export a backup and check the file in Files; import it back (preview, «Заменить данные»).
+**After updating (about 25 minutes).**
+- [ ] `https://…/tests.html` in Safari: «340 из 340 тестов пройдено».
+- [ ] «Доступна новая версия» → «Обновить». All tasks, events, lists still there. ⚙ → «Копии и данные» shows 0.6.0; a rollback copy «перед обновлением формата данных» exists.
+- [ ] Four tabs, ⚙ gear, ＋ button unchanged.
+- [ ] **Задачи:** «Без даты» on top with a small «＋»; tap it, type three lines, save: three tasks appear under «Без даты», the field closes. Below: «На этой неделе» by day (Mon–Sun; check on a Sunday and a Monday), then folded «Позже». No finished past tasks. Past unfinished are still in «Хвосты».
+- [ ] **Search (🔍 in the Задачи header):** type «ужин»; results update while typing, newest first, tasks and events labelled. Tap a dated result: Calendar opens on that day and the exact record is briefly highlighted. Tap an undated task: the editor opens. The keyboard stays up while typing.
+- [ ] **Calendar history:** open a past day; finished tasks and past events are there.
+- [ ] **Undo:** tick a task → small «Отменить» appears for a few seconds → tap: unticked. Same for move to another date and for deleting a task, an event and a list item. Make another change before tapping Undo: the old undo must not overwrite it.
+- [ ] **Recurring:** new rule with an end date; «2-й вторник месяца»; a repeating **event**; delete one occurrence (it stays skipped); old repeating tasks continue as before.
+- [ ] **Lists:** search inside an opened list; add several items with one per line; event «Подготовка»: unfinished above finished, untick restores the order.
+- [ ] **Cleanup (⚙ → cleanup):** open it; see totals and cut-off date; «Keep» on an old record protects it. «Сохранить копию» → file saved in Files. «Проверить» → select one record → remove. «Удалить все старые» → totals, cut-off, warning, tick the confirmation box, confirm; those records are gone from Calendar and Search; unfinished tasks, future events, Home/Buy and templates remain. The reminder card should not appear on the day you update; test "Remind me in a month" hides it.
+- [ ] Languages and themes: Русский/English, light/dark: nothing unreadable.
+- [ ] Airplane Mode: close and reopen: opens with your data.
+- [ ] Export a backup, check the file in Files, import it back (preview first).
 
-**First install on a new device (once).**
-- [ ] Opened from the Home Screen icon, full screen; «Запущено с экрана «Домой»: да», «Офлайн-режим: готов…».
-- [ ] Add a task, an event, a list with an item; close the app fully and reopen: all there.
-- [ ] «Сохранить копию» → share sheet → «Сохранить в Файлы»; or note that a download happened instead.
-- [ ] Note «Постоянное хранилище».
-
-**Quick check for every later version (about 2 minutes).**
-- [ ] `tests.html`: all green.
-- [ ] «Обновить» → «Копии и данные» shows the new version number; existing data still there.
-- [ ] Add, tick and delete a task; create an event; export a backup.
-- [ ] Anything the change touched, by hand.
+**Quick check for every later version (about 2 minutes).** `tests.html` green; «Обновить» shows the new version; add, tick, delete a task; export a backup.
 
 ## 6. Running the automated tests yourself
 
@@ -120,6 +108,7 @@ A version is **not published** unless every line is ticked:
 - **The other tests (for developers)** need Python 3 and Playwright (`pip install playwright && playwright install chromium`). Each copies the app into its output folder, so the original files are not changed:
   - `python3 e2e-test.py <app_folder> <output_folder>`
   - `python3 e2e-v5-test.py <app_folder> <output_folder>` (several minutes; set `ONLY=<flow>` to run one flow)
+  - `python3 e2e-v6-test.py <app_folder> <output_folder>`
   - `python3 privacy-test.py <app_folder> <output_folder>`
   - `python3 upgrade-test.py <old_version_folder> <new_version_folder> <output_folder>` — run it once for each earlier released version.
   - Do not run two tests with the same output folder at once.

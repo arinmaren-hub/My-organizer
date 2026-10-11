@@ -8,13 +8,14 @@
 //                                 shown as it is
 // Placeholders: {name} inserts a value; {name|form1|form2|form3} picks a plural
 // form for the number in `name` (Russian: one/few/many, English: one/other).
-// Param values can be { $t: key, params }, { $stamp: iso }, { $day: 'YYYY-MM-DD' },
+// Param values can be { $t: key, params }, { $stamp: iso }, { $day: 'YYYY-MM-DD' }, { $full: 'YYYY-MM-DD' } (with the year),
 // { $dt: 'YYYY-MM-DDTHH:MM' } or { $counts: {tasks, events, projects, lists} }.
 
 import { KEYS } from './storage.js';
 import { parseDateKey, isDateKey, isDateTime, timeOf } from './dates.js';
 import { RU4, EN4, NAMES } from './i18n-v4.js';
 import { RU5, EN5 } from './i18n-v5.js';
+import { RU6, EN6 } from './i18n-v6.js';
 
 export const LANGS = ['ru', 'en'];
 // Each language is named in its own language, as is usual.
@@ -72,6 +73,12 @@ export function dayLong(key) {
   if (!isDateKey(key)) return '';
   const d = parseDateKey(key);
   return lang === 'ru' ? `${d.getDate()} ${NAMES.monthsGen.ru[d.getMonth()]}` : `${NAMES.monthsGen.en[d.getMonth()]} ${d.getDate()}`;
+}
+// '9 октября 2026' / 'October 9, 2026' (a date that must be unambiguous, e.g. the cleanup cut-off)
+export function formatFullDay(key) {
+  if (!isDateKey(key)) return typeof key === 'string' ? key : '';
+  const d = parseDateKey(key);
+  return lang === 'ru' ? `${dayLong(key)} ${d.getFullYear()}` : `${dayLong(key)}, ${d.getFullYear()}`;
 }
 // 'пт, 9 окт' / 'Fri, 9 Oct'
 export function formatDay(key) {
@@ -690,6 +697,8 @@ Object.assign(RU, RU4);
 Object.assign(EN, EN4);
 Object.assign(RU, RU5);
 Object.assign(EN, EN5);
+Object.assign(RU, RU6);
+Object.assign(EN, EN6);
 
 export const DICTS = { ru: RU, en: EN };
 
@@ -703,6 +712,7 @@ function resolveParam(v) {
     if ('$t' in v) return t(v.$t, v.params);
     if ('$stamp' in v) return formatStamp(v.$stamp);
     if ('$day' in v) return formatDay(v.$day);
+    if ('$full' in v) return formatFullDay(v.$full);
     if ('$dt' in v) return formatDateTime(v.$dt);
     if ('$counts' in v) return v.$counts ? countsText(v.$counts) : t('counts.unreadable');
     if ('key' in v) return msg(v);

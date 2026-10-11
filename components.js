@@ -78,7 +78,7 @@ export function eventRow(e, label) {
   return `
     <div class="row erow" data-id="${id}">
       <div class="grow ttext" data-action="event.open" data-id="${id}" role="button" tabindex="0">
-        <span class="etime">${esc(label)}</span> <span class="title">${esc(e.title)}</span>${count}
+        <span class="etime">${esc(label)}</span> <span class="title">${e.seriesId ? '↻ ' : ''}${esc(e.title)}</span>${count}
       </div>
     </div>`;
 }

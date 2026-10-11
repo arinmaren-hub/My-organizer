@@ -27,18 +27,22 @@ import { renderData, renderAbout } from './view-data.js';
 import { renderSettings } from './view-settings.js';
 import { renderOnboarding } from './view-onboarding.js';
 import { renderSheet } from './view-sheets.js';
+import { searchResultsHtml } from './view-search.js';
+import { renderCleanup, backupSaved } from './view-cleanup.js';
+import { findCleanup, readState as readCleanupState, reminderDue, POSTPONE_DAYS } from './cleanup.js';
 import { ICONS } from './icons.js';
 import { dayWindow, suggestCutoff } from './planday.js';
 import { MODES, readAppearance, saveAppearance, applyAppearance } from './appearance.js';
 
 const TABS = ['today', 'calendar', 'tasks', 'lists'];
 const SUBS = ['evening', 'settings', 'data', 'about', 'projects']; // screens reached from «···», with a back button
-const VIEWS = { evening: renderEvening, today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData, settings: renderSettings, about: renderAbout };
+const VIEWS = { cleanup: renderCleanup, evening: renderEvening, today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData, settings: renderSettings, about: renderAbout };
 
 const storage = createLocalStorageAdapter();
 setLang(readLanguage(storage)); // chosen by hand; Russian by default; never detected
 const store = createStore({ storage });
 store.load();
+ensureCleanupBaseline(); // first day this version runs on this device: the 90 days of the reminder count from here
 
 const ui = {
   tab: 'today',
@@ -49,6 +53,7 @@ const ui = {
   quickDate: '',        // the day fast entry writes to (planning day on Today/Tasks, selected date in Calendar)
   tplEdit: null,
   cal: { mode: 'month', y: new Date().getFullYear(), m: new Date().getMonth() + 1, sel: dateKey(new Date()), picker: false },
+  cleanup: null,        // the cleanup screen: { openedAt, mode: 'home'|'review', sel: Set of entry keys }
   eveningShown: null,
   importPreview: null,
   importError: '',
@@ -147,7 +152,7 @@ function headerInfo(onboarding, lr) {
     const back = lr.back ? { label: lr.route && lr.route.startsWith('t:') ? t('lists.templates') : t('tab.lists') } : null;
     return { title: lr.title, sub: lr.sub || '', back, more: lr.route === null ? more : lr.more ? { action: lr.more, label: t('aria.menu') } : null };
   }
-  const names = { evening: t('menu.evening'), settings: t('tab.settings'), data: t('menu.data'), about: t('menu.about'), projects: t('tab.projects') };
+  const names = { cleanup: t('cleanup.title'), evening: t('menu.evening'), settings: t('tab.settings'), data: t('menu.data'), about: t('menu.about'), projects: t('tab.projects') };
   return { title: names[ui.tab] || '', sub: '', back: { label: t('tab.' + ui.prev) }, more: null };
 }
 
@@ -159,11 +164,26 @@ function fabInfo(lr, onboarding) {
   return null;
 }
 
+// After a search result is tapped: the exact record is marked for a moment (nothing is stored).
+function applyHighlight() {
+  const h = ui.highlight;
+  if (!h) return;
+  if (Date.now() > h.until) { ui.highlight = null; return; }
+  const el = [...document.querySelectorAll('#main [data-id]')].find(x => x.dataset.id === h.id && x.classList.contains('row'));
+  if (!el) return;
+  el.classList.add('hl');
+  if (!h.shown) { h.shown = true; try { el.scrollIntoView({ block: 'center' }); } catch { /* old browser */ } setTimeout(() => { if (ui.highlight === h) { ui.highlight = null; document.querySelectorAll('#main .hl').forEach(x => x.classList.remove('hl')); } }, HIGHLIGHT_MS); }
+}
+const HIGHLIGHT_MS = 2600;
+
 let lastSheetHtml = '';
 const autoDismissed = new Set();
 
 function makeCtx() {
+  if (ui.tab === 'cleanup' && !ui.cleanup) ui.cleanup = freshCleanup();
   return {
+    nowIso: new Date().toISOString(),
+    cleanupDue: ui.tab === 'today' && !store.status.readOnly && !needsOnboarding() && reminderDue(readCleanupState(store.device()), store.naturalToday()),
     today: ui.today,
     calendarToday: ui.calendarToday,
     natural: store.naturalToday(),
@@ -203,6 +223,10 @@ function render() {
   const more = $('#more-btn');
   more.hidden = !head.more;
   if (head.more) { more.dataset.action = head.more.action; more.setAttribute('aria-label', head.more.label); more.innerHTML = head.more.action === 'menu.app' ? ICONS.gear : ICONS.more; }
+  const sb = $('#search-btn');
+  sb.hidden = onboarding || !(ui.tab === 'tasks' || (ui.tab === 'lists' && lr && lr.coll === 'lists'));
+  sb.setAttribute('aria-label', t('search.title'));
+  sb.innerHTML = ICONS.search;
   $('#nav').hidden = onboarding;
   document.body.classList.toggle('no-nav', onboarding);
   const curTab = TABS.includes(ui.tab) ? ui.tab : ui.prev;
@@ -234,6 +258,8 @@ function render() {
   if (sh !== lastSheetHtml) { $('#sheet-root').innerHTML = sh; lastSheetHtml = sh; }
   document.body.classList.toggle('sheet-open', !!sh);
   restoreTyping(typing);
+  applyHighlight();
+  syncUndo();
   if (ui.refocus) {
     const f = document.querySelector(ui.refocus);
     const input = f && f.querySelector('input[name="title"], textarea[name="text"]');
@@ -565,12 +591,139 @@ const listRoute = () => {
   return r && r.c ? r : null;
 };
 
+// ---------- Quarterly cleanup (0.6.0) ----------
+// State of the reminder lives on this device only (store.device().cleanup). Nothing is ever removed
+// automatically: the reminder only offers; removal needs a saved backup and an explicit confirmation.
+// A backup saved up to 30 minutes BEFORE the screen was opened still counts (so «Сохранить копию» on the reminder card
+// and then «Удалить все…» does not ask twice); after a removal the next one needs a new backup (grace = false).
+const BACKUP_GRACE_MS = 30 * 60 * 1000;
+const freshCleanup = (mode = 'home', grace = true) => ({ openedAt: new Date(Date.now() - (grace ? BACKUP_GRACE_MS : 0)).toISOString(), mode, sel: new Set() });
+function saveCleanupState(patch) { store.setDevice({ cleanup: { ...readCleanupState(store.device()), ...patch } }); }
+function ensureCleanupBaseline() { if (!readCleanupState(store.device()).baseline) saveCleanupState({ baseline: store.naturalToday() }); }
+function cleanupFound() { return findCleanup(store.doc, store.naturalToday(), new Date().toISOString()); }
+function startCleanup(mode) {
+  if (!ui.cleanup) ui.cleanup = freshCleanup();
+  ui.cleanup.mode = mode === 'review' ? 'review' : 'home';
+  goTo('cleanup');
+  if (mode === 'all') ui.sheet = { type: 'cleanconfirm', scope: 'all' };
+  render(); window.scrollTo(0, 0);
+}
+function runCleanupNow(scope) {
+  if (!ui.cleanup || !backupSaved(makeCtx())) { store.notify('error', 'cleanup.backupFirst'); return false; }
+  const keys = scope === 'sel' ? new Set(ui.cleanup.sel) : null;
+  const r = A.runCleanup(store, store.naturalToday(), keys);
+  if (r === false) return false;
+  saveCleanupState({ lastReview: store.naturalToday(), remindAt: null });
+  ui.cleanup = freshCleanup('home', false); // the next removal needs a new backup
+  store.notify('info', 'cleanup.done', { n: r.tasks + r.events + r.lists + r.trash });
+  return true;
+}
+
+// ---------- Undo (0.6.0) ----------
+// One small temporary message after checking/unchecking, moving or deleting. It lives only in memory and only
+// while the record is exactly as that action left it: if anything changed it since, Undo disappears
+// (a newer action of the person is never overwritten). The «Удалённые» list is not affected.
+const UNDO_MS = 7000;
+const undo = { entry: null, timer: null };
+const snapOf = x => JSON.stringify(x); // the whole record: any later change, even within the same millisecond, ends the Undo
+
+function clearUndo() { if (undo.timer) clearTimeout(undo.timer); undo.timer = null; undo.entry = null; syncUndo(); }
+function offerUndo(key, guard, runIt) {
+  if (undo.timer) clearTimeout(undo.timer);
+  undo.entry = { key, guard, run: runIt };
+  undo.timer = setTimeout(clearUndo, UNDO_MS);
+  syncUndo();
+}
+function syncUndo() {
+  const el = $('#undo');
+  if (!el) return;
+  const e = undo.entry;
+  if (e && !e.guard()) { if (undo.timer) clearTimeout(undo.timer); undo.timer = null; undo.entry = null; }
+  const cur = undo.entry;
+  el.hidden = !cur;
+  el.innerHTML = cur ? `<span class="grow">${esc(t(cur.key))}</span><button type="button" data-action="undo.run">${esc(t('undo.btn'))}</button>` : '';
+}
+const taskById = id => store.doc.tasks.find(x => x.id === id);
+function withTaskUndo(id, key, act) {
+  const x = taskById(id);
+  if (!x || x.deletedAt) return act();
+  const snap = { done: !!x.done, completedAt: x.completedAt ?? null, doneDay: x.doneDay ?? null, plan: JSON.parse(JSON.stringify(x.plan)), time: x.time ?? null, reminder: x.reminder ?? null, indent: x.indent };
+  const r = act();
+  const y = taskById(id);
+  if (r === false || !y) return r;
+  const sig = snapOf(y);
+  offerUndo(key, () => { const z = taskById(id); return !!z && snapOf(z) === sig; }, () => A.undoTaskFields(store, id, snap));
+  return r;
+}
+function withDeleteUndo(coll, id, key, act) {
+  const r = act();
+  const x = store.doc[coll].find(z => z.id === id);
+  if (r === false || !x || !x.deletedAt) return r;
+  const stamp = snapOf(x);
+  offerUndo(key, () => { const z = store.doc[coll].find(q => q.id === id); return !!z && snapOf(z) === stamp; }, () => A.restoreDeleted(store, coll, id));
+  return r;
+}
+function withItemDeleteUndo(coll, listId, itemId, act) {
+  const find = () => { const c = store.doc[coll].find(z => z.id === listId); return c && c.items.find(q => q.id === itemId); };
+  const r = act();
+  const x = find();
+  if (r === false || !x || !x.deletedAt) return r;
+  const stamp = snapOf(x);
+  offerUndo('undo.item', () => { const z = find(); return !!z && snapOf(z) === stamp; }, () => A.undoContainerItemDelete(store, coll, listId, itemId));
+  return r;
+}
+
 const CLICK = {
   tab: el => {
     const k = el.dataset.tab;
     if (ui.tab === k && k === 'lists') ui.list = null;
     ui.tab = k; ui.sheet = null;
     render(); window.scrollTo(0, 0);
+  },
+  'undo.run': () => {
+    const e = undo.entry;
+    clearUndo();
+    if (!e) return;
+    if (!e.guard()) { store.notify('info', 'undo.stale'); return; }
+    e.run();
+  },
+  'cleanup.start': el => startCleanup(el.dataset.mode),
+  'cleanup.home': () => { if (ui.cleanup) { ui.cleanup.mode = 'home'; render(); } },
+  'cleanup.review': () => { if (ui.cleanup) { ui.cleanup.mode = 'review'; render(); } },
+  'cleanup.pickAll': el => {
+    if (!ui.cleanup) return;
+    for (const e of cleanupFound()[el.dataset.type] || []) { if (el.dataset.on) ui.cleanup.sel.add(e.key); else ui.cleanup.sel.delete(e.key); }
+    render();
+  },
+  'cleanup.keep': el => { A.setKeep(store, el.dataset.type, el.dataset.id, true); },
+  'cleanup.confirm': el => { if (ui.cleanup) openSheet({ type: 'cleanconfirm', scope: el.dataset.scope }); },
+  'cleanup.postpone': () => {
+    saveCleanupState({ remindAt: addDays(store.naturalToday(), POSTPONE_DAYS) });
+    store.notify('info', 'cleanup.postponed');
+  },
+  'cleanup.keepAll': () => {
+    saveCleanupState({ lastReview: store.naturalToday(), remindAt: null });
+    store.notify('info', 'cleanup.keptAll');
+  },
+  'keep.toggle': el => shut(() => A.setKeep(store, el.dataset.coll, el.dataset.id, !!el.dataset.on)),
+  'nodate.open': () => openSheet({ type: 'nodate' }),
+  'search.open': () => {
+    if (ui.tab === 'lists') { const r = listRoute(); if (r && r.coll === 'lists') openSheet({ type: 'search', scope: 'list', list: r.c.id, q: '' }); return; }
+    openSheet({ type: 'search', q: '' });
+  },
+  'listsearch.go': el => openSheet({ type: 'edit', kind: 'item', coll: el.dataset.coll, list: el.dataset.list, id: el.dataset.id }),
+  'search.go': el => {
+    const type = el.dataset.type, id = el.dataset.id;
+    const rec = (type === 'event' ? store.doc.events : store.doc.tasks).find(x => x.id === id && !x.deletedAt);
+    if (!rec) return;
+    if (type === 'task' && rec.plan.kind === 'none') { openSheet({ type: 'edit', kind: 'task', id }); return; }
+    const date = type === 'event' ? rec.start.slice(0, 10) : rec.plan.date;
+    ui.sheet = null;
+    ui.tab = 'calendar';
+    Object.assign(ui.cal, { y: Number(date.slice(0, 4)), m: Number(date.slice(5, 7)), sel: date, mode: 'month', picker: false });
+    if (type === 'task' && rec.plan.kind === 'week') uiState.fold.calweek = true;
+    ui.highlight = { id, until: Date.now() + HIGHLIGHT_MS + 1500, shown: false };
+    render();
   },
   go: el => { goTo(el.dataset.tab); render(); window.scrollTo(0, 0); },
   back: () => goBack(),
@@ -613,11 +766,11 @@ const CLICK = {
   'wait.new': () => openSheet({ type: 'waitadd' }),
 
   // tasks
-  'task.move': el => shut(() => A.moveTask(store, el.dataset.id, el.dataset.kind)),
-  'task.delete': el => shut(() => confirmDelete() && A.softDelete(store, 'tasks', el.dataset.id)),
+  'task.move': el => shut(() => withTaskUndo(el.dataset.id, 'undo.moved', () => A.moveTask(store, el.dataset.id, el.dataset.kind))),
+  'task.delete': el => shut(() => confirmDelete() && withDeleteUndo('tasks', el.dataset.id, 'undo.taskDeleted', () => A.softDelete(store, 'tasks', el.dataset.id))),
   'task.duplicate': el => shut(() => A.duplicateTask(store, el.dataset.id)),
   'task.toWaiting': el => shut(() => A.taskToWaiting(store, el.dataset.id)),
-  'event.delete': el => shut(() => confirmDelete() && A.softDelete(store, 'events', el.dataset.id)),
+  'event.delete': el => shut(() => confirmDelete() && withDeleteUndo('events', el.dataset.id, 'undo.eventDeleted', () => A.softDelete(store, 'events', el.dataset.id))),
   'project.delete': el => confirmDelete() && A.softDelete(store, 'projects', el.dataset.id),
   'qty.step': el => A.stepQuantity(store, el.dataset.id, Number(el.dataset.delta)),
   restore: el => {
@@ -696,7 +849,7 @@ const CLICK = {
     if (ok && ui.list === 'l:' + el.dataset.id) ui.list = null;
     return ok;
   }),
-  'item.delete': el => shut(() => confirmDeleteItem() && A.deleteContainerItem(store, el.dataset.coll || 'lists', el.dataset.list, el.dataset.id)),
+  'item.delete': el => shut(() => confirmDeleteItem() && withItemDeleteUndo(el.dataset.coll || 'lists', el.dataset.list, el.dataset.id, () => A.deleteContainerItem(store, el.dataset.coll || 'lists', el.dataset.list, el.dataset.id))),
   'cat.renameOpen': el => { if (ui.sheet) { ui.sheet = { ...ui.sheet, renaming: el.dataset.name }; render(); } },
   'cat.remove': el => confirm(t('confirm.removeCategory', { name: el.dataset.name })) && A.removeCategory(store, el.dataset.coll, el.dataset.list, el.dataset.name),
   'list.saveTemplate': el => shut(() => {
@@ -742,7 +895,8 @@ function calKeepSel() {
 }
 
 const CHANGE = {
-  'task.toggle': el => A.setTaskDone(store, el.dataset.id, el.checked),
+  'cleanup.pick': el => { if (!ui.cleanup) return; const k = el.dataset.key; if (el.checked) ui.cleanup.sel.add(k); else ui.cleanup.sel.delete(k); render(); },
+  'task.toggle': el => withTaskUndo(el.dataset.id, el.checked ? 'undo.checked' : 'undo.unchecked', () => A.setTaskDone(store, el.dataset.id, el.checked)),
   'milestone.toggle': el => A.setMilestoneDone(store, el.dataset.project, el.dataset.id, el.checked),
   'item.toggle': el => A.setListItemDone(store, el.dataset.list, el.dataset.id, el.checked),
   'buy.toggle': el => { if (el.checked) A.markBought(store, el.dataset.id); },
@@ -767,6 +921,8 @@ const FORMS = {
     return !!id;
   }),
   'list.rename': f => shut(() => A.renameContainer(store, 'lists', f.dataset.list, val(f, 'name'))),
+  'cleanup.run': f => shut(() => runCleanupNow(f.dataset.scope)),
+  'nodate.add': f => shut(() => A.addTasksFromText(store, val(f, 'text'), 'none')),
   'items.add': f => shut(() => A.addContainerItems(store, f.dataset.coll, f.dataset.list, val(f, 'text'), val(f, 'category').trim() || null)),
   'home.add': f => shut(() => {
     const ok = A.addHomeItems(store, val(f, 'text'));
@@ -793,7 +949,7 @@ const FORMS = {
   // editing (inside sheets)
   'task.edit': f => shut(() => A.editTask(store, f.dataset.id, { title: val(f, 'title'), kind: val(f, 'kind'), date: val(f, 'date'), time: val(f, 'time'), deadline: val(f, 'deadline') })),
   'event.edit': f => shut(() => A.editEvent(store, f.dataset.id, { title: val(f, 'title'), start: val(f, 'start'), end: val(f, 'end') })),
-  'task.moveDate': f => shut(() => A.moveTask(store, f.dataset.id, 'day', val(f, 'date'))),
+  'task.moveDate': f => shut(() => withTaskUndo(f.dataset.id, 'undo.moved', () => A.moveTask(store, f.dataset.id, 'day', val(f, 'date')))),
   'review.date': f => shut(() => A.reviewTask(store, f.dataset.id, 'date', val(f, 'date'), f.dataset.part)),
   'convert.go': f => shut(() => {
     const confirmed = f.dataset.confirmed === '1';
@@ -824,7 +980,7 @@ const FORMS = {
   }
 };
 
-const seriesValues = f => ({ title: val(f, 'title'), freq: val(f, 'freq'), interval: val(f, 'interval'), mode: val(f, 'mode'), startDate: val(f, 'startDate'), time: val(f, 'time') });
+const seriesValues = f => ({ title: val(f, 'title'), freq: val(f, 'freq'), interval: val(f, 'interval'), mode: val(f, 'mode'), startDate: val(f, 'startDate'), time: val(f, 'time'), kind: val(f, 'kind') === 'event' ? 'event' : null, until: val(f, 'until'), monthBy: val(f, 'monthBy'), endTime: val(f, 'endTime') });
 
 const errText = e => (e && e.key ? m(e.key, e.params) : (e && e.message) || String(e));
 
@@ -887,6 +1043,16 @@ function rememberQuickDraft(e) {
     if (ui.quick.ask) { ui.quick.ask = null; render(); }
   }
 }
+function onSearchInput(e) {
+  const f = e.target.form;
+  if (!f || f.dataset.form !== 'search' || !ui.sheet || ui.sheet.type !== 'search') return;
+  ui.sheet.q = e.target.value;
+  const box = document.querySelector('#search-results');
+  if (box) box.innerHTML = searchResultsHtml(store.doc, ui.sheet);
+  // the sheet's stored HTML follows, so the next redraw finds nothing to rebuild (the field keeps its focus)
+  lastSheetHtml = renderSheet(store.doc, makeCtx());
+}
+document.addEventListener('input', onSearchInput);
 document.addEventListener('input', rememberQuickDraft);
 document.addEventListener('input', rememberOnboardingDraft);
 document.addEventListener('change', rememberOnboardingDraft);

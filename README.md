@@ -1,4 +1,4 @@
-# Мой органайзер — version 0.5.0
+# Мой органайзер — version 0.6.0
 
 A personal organizer that runs entirely on your iPhone or iPad: tasks, events, projects and lists.
 No account, no cloud, no AI. Your data stays on the device; you keep backups yourself.
@@ -92,10 +92,10 @@ Something went wrong after an import or an update? **⚙ → Копии и да�
 
 ## 5. Publishing a new version (for whoever changes the code)
 
-0. **Updating an existing installation (0.4.0 → 0.5.0, and older):** first save a backup (⚙ → «Копии и данные» → «Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address) — see `CHANGESET.md` for the exact list, for the *changed-only* package, and for what to delete. **Upload `sw.js` last** (or all files in one commit): installed copies update when they see the new `sw.js`. Open the installed app → «Доступна новая версия» → «Обновить». From 0.4.0 there is **no data migration** (the format is the same); older versions are upgraded automatically with a copy kept in «Копии и данные → Автокопии».
+0. **Updating an existing installation (0.5.2 → 0.6.0, and older):** first save a backup (⚙ → «Копии и данные» → «Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address) — see `CHANGESET.md` for the exact list, for the *changed-only* package, and for what to delete. **Upload `sw.js` last** (or all files in one commit): installed copies update when they see the new `sw.js`. Open the installed app → «Доступна новая версия» → «Обновить». From 0.4.0 there is **no data migration** (the format is the same); older versions are upgraded automatically with a copy kept in «Копии и данные → Автокопии».
 1. Change the files. Follow `DECISIONS.md` sections E, F (data preservation) and G (privacy).
 2. Set the same new version in `version.js` (`APP_VERSION`) and `sw.js` (`VERSION`). New file? Add it to `ASSETS` in `sw.js`.
-3. Run the release gate (`TESTING.md`, section 6): `tests.html` all green, and `e2e-v5-test.py`, `e2e-test.py`, `privacy-test.py`, `upgrade-test.py` (from every earlier version) all passing. **If a migration or isolation test fails, do not publish.**
+3. Run the release gate (`TESTING.md`, section 6): `tests.html` all green, and `e2e-v6-test.py`, `e2e-v5-test.py`, `e2e-test.py`, `privacy-test.py`, `upgrade-test.py` (from every earlier version) all passing. **If a migration or isolation test fails, do not publish.**
 4. Upload the changed files to GitHub (**Add file → Upload files**, same names overwrite) → **Commit changes**.
 5. Within a few minutes, the installed app shows **«Доступна новая версия · Обновить»**. Tap it. Data is not affected.
 6. Run the short manual checklist in `TESTING.md`.

@@ -6,7 +6,7 @@
 // that an update exists; they then show the "new version available" banner.
 // If you add a new file, add it to ASSETS too (tests.html checks both).
 
-const VERSION = '0.5.2';
+const VERSION = '0.6.0';
 const CACHE = 'organizer-' + VERSION;
 const ASSETS = [
   './',
@@ -40,6 +40,11 @@ const ASSETS = [
   './i18n.js',
   './i18n-v4.js',
   './i18n-v5.js',
+  './i18n-v6.js',
+  './search.js',
+  './view-search.js',
+  './cleanup.js',
+  './view-cleanup.js',
   './home.js',
   './icons.js',
   './view-sheets.js',
@@ -70,11 +75,8 @@ self.addEventListener('install', event => {
     const ver = fetched.find(([u]) => u === './version.js');
     if (ver && !(await ver[1].clone().text()).includes(`'${VERSION}'`)) throw new Error('version.js does not match sw.js');
     for (const [url, res] of fetched) await cache.put(url, res);
-    // Recovery-only: 0.5.1 fails before its Update button can render.
-    // Activate this fully-cached repair automatically; no user data is changed.
-    await self.skipWaiting();
   })());
-  // Recovery exception: 0.5.2 activates after every asset has been cached successfully.
+  // No skipWaiting() here: the new version waits until the user taps "Обновить" (0.5.2's recovery auto-activation is gone).
 });
 
 self.addEventListener('activate', event => {

@@ -39,7 +39,7 @@ export function registerV4(h) {
     const { store, storage } = setup({ [KEYS.data]: V3_RAW });
     ok(!store.status.readOnly);
     const before = JSON.parse(V3_RAW), after = savedDoc(storage);
-    eq(after.schemaVersion, 4);
+    eq(after.schemaVersion, 5);
     eq(after.dataId, 'org-frozen-3');
     eq(after.settings, before.settings, 'настройки дня и вечера');
     eq(after.tasks, before.tasks.map(t => ({ ...t, ...NEW_FIELDS })));

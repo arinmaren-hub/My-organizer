@@ -1,4 +1,4 @@
-# SECURITY.md — privacy, data isolation and their limits (version 0.5.0)
+# SECURITY.md — privacy, data isolation and their limits (version 0.6.0)
 
 This file says what the app does to keep each person's data private, what it **cannot** protect against, and how this was tested. It does not claim the app is perfectly secure: every guarantee below comes with its evidence, and every known gap is listed.
 
@@ -62,6 +62,13 @@ All on the final files, in headless Chromium 141 (Playwright 1.56), served over 
 How to run them yourself: `TESTING.md`, section 6.
 
 ---
+
+## 4a. What 0.6.0 adds to the privacy picture
+
+- **No new network code, no third-party resources, CSP unchanged.** Search runs in the page over the data already in memory; it keeps no index and no history of what you searched.
+- **The cleanup reminder** (`organizer:device` → `cleanup`) holds only dates, on this device only; it is not part of the data, backups or exports.
+- **Cleanup removes records for real** from the main data after you save a backup and confirm. Limit: the app's own safety copies (`organizer:snapshots`, `organizer:rollback`) taken earlier still contain them until they rotate out; they stay on the same device, in the same browser storage. If you need the removed records gone from the device completely, remove the old copies in ⚙ → «Копии и данные» → «Автокопии» as well.
+- **The backup file** you save for a cleanup is an ordinary JSON export: it contains your data in plain text; keep it somewhere private (`SECURITY.md` §3, items 5–6).
 
 ## 5. Keeping it this way
 

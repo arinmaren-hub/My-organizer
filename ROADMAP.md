@@ -1,6 +1,6 @@
 # ROADMAP.md — release order
 
-Updated 2026-10-10. **Current version: 0.5.0** (calm redesign over 0.4.0, built as one release at the owner's request; waiting for the owner's review). 0.4.0 is released and installed.
+Updated 2026-10-11. **Current version: 0.6.0** (built on the 0.5.2 recovery release; waiting for the owner's review and manual iPhone testing; **not deployed**). 0.5.2 is the version currently running.
 Designs are in `DECISIONS.md` (sections B–B9). Release rules for data (R1–R12) are in `DECISIONS.md` section F; privacy rules (P1–P8) in section G and `SECURITY.md`.
 Each release is small, changes the data format at most once, keeps all existing data, and must be approved before work starts and reviewed before the next one begins. **The next release does not start until 0.5.0 is reviewed.**
 
@@ -9,7 +9,8 @@ Each release is small, changes the data format at most once, keeps all existing 
 | S1 + S2 | 0.3.0 | Interface language RU / EN; planning day and onboarding; data-preservation safeguards; privacy checks | schema 3 | **released** (installed) |
 | S3–S8 + calendar | 0.4.0 | Task editing; morning/evening reviews with memory; evening overview; smart quick entry; waiting for others; list templates and categories; recurring tasks; interactive calendar | schema 4: `series`, `waiting`, `templates`, task and list fields | **released** (installed) |
 | UX | 0.5.0 | Calm redesign: 4 bottom tabs, ⚙ menu, quiet rows (long-press actions), finished items last, «＋» multi-line entry, sheets instead of inline forms, indent by swipe, Lists index + Дом/Купить inventory, compact calendar, task ↔ event conversion, event preparation | none (schema 4; optional fields only) | **built and tested in Chromium, waiting for the owner's review and a real-iPhone check** |
-| next | — | Repeating events on the same engine (and the `.ics`/alerts work), recurrence end dates and «2nd Tuesday» rules, Phase 3 projects, Quarterly Cleanup (B3) | as designed | not started |
+| UX + data | 0.6.0 | Tasks screen (No date / This week / Later), unified search with calendar highlight, repeating events + end dates + «2nd Tuesday» rules, Undo, list search, quarterly tidy-up (B14) | schema 5 (optional fields only) | **built, awaiting review** (not deployed) |
+| next | — | `.ics`/alerts work, Phase 3 projects | as designed | not started |
 
 
 ## Before the app is shared with other people
@@ -30,6 +31,10 @@ Each release is small, changes the data format at most once, keeps all existing 
 - **Language:** `i18n.js` with every interface text in Russian and English; manual choice in onboarding and «Настройки»; Russian by default; no automatic detection; per-device key `organizer:language`.
 - **Planning day:** `planday.js`; «Сегодня», reviews, overdue detection and quick add follow the planning day; the screen changes day at the cutoff; onboarding (language, wake-up, bedtime, cutoff = bedtime, skip = 00:00); «Настройки» → «Мой день»; «Завершить день».
 - **Data safety and privacy (owner's rules of 2026-10-09):** daily copies (5) and rollback copies (5); guarded upgrade; `dataId` and a second confirmation for another organizer's backup; hardening against odd backup files; `SECURITY.md`; two-context privacy test; real-update upgrade test from 0.2.0, 0.2.1 and 0.2.2.
+
+### 0.6.0 — see `DECISIONS.md` B14
+
+Built as one release on 0.5.2 at the owner's request: Tasks screen redesign, search, recurrence extensions, Undo, list search and the quarterly tidy-up.
 
 ### 0.5.0 — the calm redesign (see `DECISIONS.md` B11)
 - Viewing/using by default; editing only on request. Four tabs; header menu; «＋» multi-line entry; row menus; sheets; swipe indent; Lists index with Купить and Дом; compact calendar with conversion and preparation lists. Russian is the primary design language; English is the same components and dictionaries.
