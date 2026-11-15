@@ -2,7 +2,7 @@
 // Each one edits a draft copy inside store.update(); throwing an Error cancels it
 // and shows the message. Screens call these; they never edit data themselves.
 
-import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, PLAN_KINDS, SERIES_FREQS, SERIES_MODES, SERIES_MONTHLY_RULES } from './schema.js';
+import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, newGoal, PLAN_KINDS, SERIES_FREQS, SERIES_MODES, SERIES_MONTHLY_RULES } from './schema.js';
 import { isDateKey, isDateTime, isTime, weekKey, addDays } from './dates.js';
 import { parseQuick } from './parsedate.js';
 import { ensureOccurrences, afterCompletion, isOpen, isUntouchedEventOccurrence, eventTimes } from './recur.js';
@@ -180,7 +180,7 @@ export function moveTask(store, id, kind, dateInput = '') {
 
 // ---------- Soft delete / restore (any top-level collection) ----------
 
-const LABELS = { tasks: 'what.task', events: 'what.event', projects: 'what.project', lists: 'what.list', series: 'what.series', waiting: 'what.waiting', templates: 'what.template' };
+const LABELS = { tasks: 'what.task', events: 'what.event', projects: 'what.project', lists: 'what.list', series: 'what.series', waiting: 'what.waiting', templates: 'what.template', goals: 'what.goal' };
 
 export function softDelete(store, collection, id) {
   return store.update('act.delete', (d, ctx) => {
@@ -1074,4 +1074,133 @@ export function setKeep(store, coll, id, on) {
 // keys = Set of entry keys, or null for every eligible record. The CALLER makes sure a backup was saved first.
 export function runCleanup(store, today, keys = null) {
   return store.update('act.cleanup', (d, ctx) => removeCleanup(d, today, ctx.now, keys));
+}
+
+// ---------- Goals (0.7.0) ----------
+// A goal with its steps in order. Ticking a step never moves it; the first unfinished step is the «next step»
+// that «Задачи» shows. Deleting a goal is a soft delete (it appears in «Удалённые» for 30 days); a step is
+// soft-deleted inside its goal like a list item. Nothing here ever creates or changes tasks.
+const textLines = text => String(text || '').split('\n').map(x => x.trim()).filter(Boolean);
+const goalOf = (d, id) => findAlive(d.goals, id, 'what.goal');
+const stepOf = (g, stepId) => findAlive(g.steps, stepId, 'what.step');
+
+// Returns the new goal's id.
+export function addGoal(store, { title, steps = '', note = '' }) {
+  const name = String(title || '').trim();
+  const list = textLines(steps);
+  return store.update('act.addGoal', (d, { now, uid }) => {
+    if (!name) throw appError('err.needTitle');
+    const g = newGoal({ id: uid(), title: name, note: String(note || '').replace(/\s+$/, ''), now });
+    for (const x of list) g.steps.push(newItem({ id: uid(), title: x, now }));
+    d.goals.push(g);
+    return g.id;
+  });
+}
+
+export function renameGoal(store, id, title) {
+  return store.update('act.editGoal', (d, { now }) => {
+    const g = goalOf(d, id);
+    g.title = cleanName(title);
+    g.updatedAt = now;
+  });
+}
+
+export function setGoalNote(store, id, note) {
+  return store.update('act.editGoal', (d, { now }) => {
+    const g = goalOf(d, id);
+    g.note = String(note || '').replace(/\s+$/, '');
+    g.updatedAt = now;
+  });
+}
+
+// «Цель достигнута» / «Вернуть в работу». The steps are left exactly as they are.
+export function setGoalReached(store, id, reached) {
+  return store.update('act.editGoal', (d, { now }) => {
+    const g = goalOf(d, id);
+    g.doneAt = reached ? now : null;
+    g.updatedAt = now;
+  });
+}
+
+// «На паузу» / «Снять с паузы»: only whether «Задачи» shows the goal's next step. Nothing else changes.
+export function setGoalPaused(store, id, paused) {
+  return store.update('act.editGoal', (d, { now }) => {
+    const g = goalOf(d, id);
+    if (paused) g.pausedAt = now; else delete g.pausedAt;
+    g.updatedAt = now;
+  });
+}
+
+// One step per non-empty line, added at the end, in the order typed.
+export function addGoalSteps(store, id, text) {
+  const list = textLines(text);
+  return store.update('act.addStep', (d, { now, uid }) => {
+    if (!list.length) throw appError('err.needItemTitle');
+    const g = goalOf(d, id);
+    for (const x of list) g.steps.push(newItem({ id: uid(), title: x, now }));
+    g.updatedAt = now;
+    return list.length;
+  });
+}
+
+export function editGoalStep(store, id, stepId, title) {
+  return store.update('act.editStep', (d, { now }) => {
+    const g = goalOf(d, id);
+    const x = stepOf(g, stepId);
+    const text = String(title || '').trim();
+    if (!text) throw appError('err.needItemTitle');
+    x.title = text; x.updatedAt = now; g.updatedAt = now;
+  });
+}
+
+// Moves a step one place up (dir < 0) or down among the steps that are not deleted.
+export function moveGoalStep(store, id, stepId, dir) {
+  return store.update('act.editStep', (d, { now }) => {
+    const g = goalOf(d, id);
+    const x = stepOf(g, stepId);
+    const live = g.steps.filter(s => !s.deletedAt);
+    const i = live.indexOf(x), j = i + (dir < 0 ? -1 : 1);
+    if (j < 0 || j >= live.length) return;
+    const a = g.steps.indexOf(live[i]), b = g.steps.indexOf(live[j]);
+    [g.steps[a], g.steps[b]] = [g.steps[b], g.steps[a]];
+    g.updatedAt = now;
+  });
+}
+
+export function setGoalStepDone(store, id, stepId, done) {
+  return store.update('act.stepDone', (d, { now }) => {
+    const g = goalOf(d, id);
+    const x = stepOf(g, stepId);
+    x.done = !!done;
+    if (x.done) x.doneAt = now; else delete x.doneAt;
+    x.updatedAt = now; g.updatedAt = now;
+  });
+}
+
+export function deleteGoalStep(store, id, stepId) {
+  return store.update('act.editStep', (d, { now }) => {
+    const g = goalOf(d, id);
+    const x = stepOf(g, stepId);
+    x.deletedAt = now; x.updatedAt = now; g.updatedAt = now;
+  });
+}
+
+// Undo (app.js calls these only while the step is still exactly as the action left it).
+export function undoGoalStep(store, id, stepId, snap) {
+  return store.update('act.undo', (d, { now }) => {
+    const g = goalOf(d, id);
+    const x = stepOf(g, stepId);
+    x.done = !!snap.done;
+    if (snap.doneAt) x.doneAt = snap.doneAt; else delete x.doneAt;
+    x.updatedAt = now; g.updatedAt = now;
+  });
+}
+
+export function undoGoalStepDelete(store, id, stepId) {
+  return store.update('act.undo', (d, { now }) => {
+    const g = goalOf(d, id);
+    const x = g.steps.find(s => s.id === stepId && s.deletedAt);
+    if (!x) throw appError('err.deletedNotFound');
+    x.deletedAt = null; x.updatedAt = now; g.updatedAt = now;
+  });
 }

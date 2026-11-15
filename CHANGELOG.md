@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — 2026-11-15 — «Цели»: goals with steps, without pressure
+
+Built on 0.6.0. **Same address, same storage keys, same installed app.** The data format moves from schema 5 to **6** (one new collection, `goals`); your data is converted automatically after a full copy is kept (⚙ → «Копии и данные»). Older versions of the app will show newer data read-only.
+
+**What changed for you**
+- **A fifth tab «Цели».** A goal has a name, an optional note (ideas, books, links — web addresses become tappable) and steps in the order you write them. «＋» on the Goals screen makes a goal (steps one per line); «＋» inside a goal adds steps. Tick a step: it stays in its place, struck through, and the next one is marked «следующий шаг». Tap a step to rename it, move it up/down or delete it. «···» in a goal: rename, note, pause, goal reached, delete.
+- **In «Задачи»** one folded line «Шаги к целям · N» (after «На этой неделе») holds the next step of every goal in work. Ticking it there is the same as ticking it in the goal; Undo works.
+- **No pressure:** steps have no dates or deadlines, never become «хвосты», are never moved or counted; a goal can be **paused** (its step leaves «Задачи»); «Сегодня» and the reviews do not show goals.
+- **Search** also finds goals (name or note) and their steps.
+- «Удалённые» now names deleted repeating rules, waiting items and templates properly (they showed technical keys).
+
+**Safety:** goals are in backups, imports, rollback copies, the lost-records check and the 30-day «Удалённые»; cleanup never touches them; a broken goal or step from an imported file is quarantined, not dropped.
+
+**Not changed:** everything else from 0.6.0 (Tasks screen, search, undo, recurrence, cleanup, lists, Home/Buy, templates, Tails, Waiting for Others, planning day, language, theme, offline).
+
+**Known limits:** nothing was tested on a real iPhone/Safari; see `TESTING.md`.
+
 ## 0.6.0 — 2026-10-11 — Current work first, search, undo, repeats with end dates, quarterly tidy-up
 
 Built on the 0.5.2 recovery release, not rebuilt. **Same address, same storage keys, same installed app.** The data format moves from schema 4 to **5** (new optional fields only); your data is converted automatically after a full copy is kept (⚙ → «Копии и данные»). Older versions of the app will show newer data read-only.

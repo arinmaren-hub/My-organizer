@@ -23,6 +23,7 @@ import { renderCalendar } from './view-calendar.js';
 import { renderTasks } from './view-tasks.js';
 import { renderProjects } from './view-projects.js';
 import { renderLists, listsRoute } from './view-lists.js';
+import { renderGoals, goalsRoute } from './view-goals.js';
 import { renderData, renderAbout } from './view-data.js';
 import { renderSettings } from './view-settings.js';
 import { renderOnboarding } from './view-onboarding.js';
@@ -34,9 +35,9 @@ import { ICONS } from './icons.js';
 import { dayWindow, suggestCutoff } from './planday.js';
 import { MODES, readAppearance, saveAppearance, applyAppearance } from './appearance.js';
 
-const TABS = ['today', 'calendar', 'tasks', 'lists'];
+const TABS = ['today', 'calendar', 'tasks', 'lists', 'goals']; // «Цели» added in 0.7.0 at the owner's request
 const SUBS = ['evening', 'settings', 'data', 'about', 'projects']; // screens reached from «···», with a back button
-const VIEWS = { cleanup: renderCleanup, evening: renderEvening, today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, data: renderData, settings: renderSettings, about: renderAbout };
+const VIEWS = { cleanup: renderCleanup, evening: renderEvening, today: renderToday, calendar: renderCalendar, tasks: renderTasks, projects: renderProjects, lists: renderLists, goals: renderGoals, data: renderData, settings: renderSettings, about: renderAbout };
 
 const storage = createLocalStorageAdapter();
 setLang(readLanguage(storage)); // chosen by hand; Russian by default; never detected
@@ -48,6 +49,7 @@ const ui = {
   tab: 'today',
   prev: 'today',        // the tab a «···» screen returns to
   list: null,           // route inside «Списки» (view-lists.js)
+  goal: null,           // route inside «Цели»: null = the index, or the id of the open goal (view-goals.js)
   sheet: null,          // the open bottom sheet: { type, ... } (view-sheets.js)
   quick: { text: '', ask: null }, // fast-entry draft survives redraws; ask = a line waiting for «задача или событие?»
   quickDate: '',        // the day fast entry writes to (planning day on Today/Tasks, selected date in Calendar)
@@ -117,7 +119,7 @@ function captureTyping() {
   const f = el.form;
   if (!f || !f.dataset.form) return null;
   let sel = `form[data-form="${CSS.escape(f.dataset.form)}"]`;
-  for (const k of ['project', 'list', 'id', 'item', 'coll', 'event', 'name']) {
+  for (const k of ['project', 'list', 'id', 'item', 'coll', 'event', 'name', 'goal']) {
     if (f.dataset[k]) sel += `[data-${k}="${CSS.escape(f.dataset[k])}"]`;
   }
   let start = null, end = null;
@@ -139,7 +141,7 @@ function restoreTyping(t) {
 const needsOnboarding = () => !store.doc.settings.day.setupDone && !store.status.readOnly;
 
 // What the page header shows: Today = weekday + planning date; other screens = their name.
-function headerInfo(onboarding, lr) {
+function headerInfo(onboarding, lr, gr) {
   if (onboarding) return { title: t('app.title'), sub: '', back: null, more: null };
   const more = { action: 'menu.app', label: t('aria.appMenu') };
   if (ui.tab === 'today') {
@@ -152,13 +154,18 @@ function headerInfo(onboarding, lr) {
     const back = lr.back ? { label: lr.route && lr.route.startsWith('t:') ? t('lists.templates') : t('tab.lists') } : null;
     return { title: lr.title, sub: lr.sub || '', back, more: lr.route === null ? more : lr.more ? { action: lr.more, label: t('aria.menu') } : null };
   }
+  if (ui.tab === 'goals') {
+    if (!gr || !gr.route) return { title: t('tab.goals'), sub: '', back: null, more };
+    return { title: gr.title, sub: gr.sub || '', back: { label: t('tab.goals') }, more: { action: gr.more, label: t('aria.menu') } };
+  }
   const names = { cleanup: t('cleanup.title'), evening: t('menu.evening'), settings: t('tab.settings'), data: t('menu.data'), about: t('menu.about'), projects: t('tab.projects') };
   return { title: names[ui.tab] || '', sub: '', back: { label: t('tab.' + ui.prev) }, more: null };
 }
 
 // The floating «＋»: what it does depends on the screen.
-function fabInfo(lr, onboarding) {
+function fabInfo(lr, onboarding, gr) {
   if (onboarding || store.status.readOnly) return null;
+  if (ui.tab === 'goals' && gr) return { label: t(gr.fab === 'newgoal' ? 'goals.new' : 'goals.addSteps') };
   if (ui.tab === 'today' || ui.tab === 'tasks' || ui.tab === 'calendar') return { label: t('fab.add') };
   if (ui.tab === 'lists' && lr && lr.fab) return { label: t(lr.fab === 'newlist' ? 'lists.new' : lr.fab === 'newtpl' ? 'lists.newTemplate' : 'lists.addItem') };
   return null;
@@ -212,7 +219,12 @@ function render() {
     lr = listsRoute(store.doc, ui.list);
     if (!lr) { ui.list = null; lr = listsRoute(store.doc, null); } else ui.list = lr.route;
   }
-  const head = headerInfo(onboarding, lr);
+  let gr = null;
+  if (ui.tab === 'goals') {
+    gr = goalsRoute(store.doc, ui.goal);
+    if (!gr) { ui.goal = null; gr = goalsRoute(store.doc, null); }
+  }
+  const head = headerInfo(onboarding, lr, gr);
   $('#app-title').textContent = head.title;
   $('#subtitle').textContent = head.sub;
   $('#subtitle').hidden = !head.sub;
@@ -224,7 +236,7 @@ function render() {
   more.hidden = !head.more;
   if (head.more) { more.dataset.action = head.more.action; more.setAttribute('aria-label', head.more.label); more.innerHTML = head.more.action === 'menu.app' ? ICONS.gear : ICONS.more; }
   const sb = $('#search-btn');
-  sb.hidden = onboarding || !(ui.tab === 'tasks' || (ui.tab === 'lists' && lr && lr.coll === 'lists'));
+  sb.hidden = onboarding || !(ui.tab === 'tasks' || (ui.tab === 'goals' && gr && !gr.route) || (ui.tab === 'lists' && lr && lr.coll === 'lists'));
   sb.setAttribute('aria-label', t('search.title'));
   sb.innerHTML = ICONS.search;
   $('#nav').hidden = onboarding;
@@ -232,7 +244,7 @@ function render() {
   const curTab = TABS.includes(ui.tab) ? ui.tab : ui.prev;
   $('#nav').innerHTML = TABS.map(k =>
     `<button type="button" class="${curTab === k ? 'active' : ''}" data-action="tab" data-tab="${k}"${curTab === k && TABS.includes(ui.tab) ? ' aria-current="page"' : ''}>${ICONS[k]}<span>${esc(t('tab.' + k))}</span></button>`).join('');
-  const fab = fabInfo(lr, onboarding);
+  const fab = fabInfo(lr, onboarding, gr);
   const fabEl = $('#fab');
   fabEl.hidden = !fab;
   if (fab) { fabEl.setAttribute('aria-label', fab.label); fabEl.innerHTML = ICONS.plus; }
@@ -582,6 +594,7 @@ const ids = el => String(el.dataset.ids || '').split(',').filter(Boolean);
 const goBack = () => {
   if (SUBS.includes(ui.tab)) { ui.tab = ui.prev || 'today'; }
   else if (ui.tab === 'lists') ui.list = ui.list && ui.list.startsWith('t:') ? 'templates' : null;
+  else if (ui.tab === 'goals') ui.goal = null;
   ui.sheet = null;
   render();
   window.scrollTo(0, 0);
@@ -673,10 +686,40 @@ function withItemDeleteUndo(coll, listId, itemId, act) {
   return r;
 }
 
+// Goals (0.7.0): ticking or removing a step can be undone the same way.
+const stepById = (goalId, stepId) => { const g = store.doc.goals.find(x => x.id === goalId && !x.deletedAt); return g ? g.steps.find(x => x.id === stepId) || null : null; };
+function withStepUndo(goalId, stepId, key, act) {
+  const x = stepById(goalId, stepId);
+  if (!x || x.deletedAt) return act();
+  const snap = { done: !!x.done, doneAt: x.doneAt || null };
+  const r = act();
+  const y = stepById(goalId, stepId);
+  if (r === false || !y) return r;
+  const sig = snapOf(y);
+  offerUndo(key, () => { const z = stepById(goalId, stepId); return !!z && snapOf(z) === sig; }, () => A.undoGoalStep(store, goalId, stepId, snap));
+  return r;
+}
+function withStepDeleteUndo(goalId, stepId, act) {
+  const r = act();
+  const x = stepById(goalId, stepId);
+  if (r === false || !x || !x.deletedAt) return r;
+  const stamp = snapOf(x);
+  offerUndo('undo.stepDeleted', () => { const z = stepById(goalId, stepId); return !!z && snapOf(z) === stamp; }, () => A.undoGoalStepDelete(store, goalId, stepId));
+  return r;
+}
+function openGoal(id, stepId) {
+  ui.sheet = null;
+  ui.tab = 'goals';
+  ui.goal = id;
+  if (stepId) ui.highlight = { id: stepId, until: Date.now() + HIGHLIGHT_MS + 1500, shown: false };
+  render(); if (!stepId) window.scrollTo(0, 0);
+}
+
 const CLICK = {
   tab: el => {
     const k = el.dataset.tab;
     if (ui.tab === k && k === 'lists') ui.list = null;
+    if (ui.tab === k && k === 'goals') ui.goal = null;
     ui.tab = k; ui.sheet = null;
     render(); window.scrollTo(0, 0);
   },
@@ -714,6 +757,8 @@ const CLICK = {
   'listsearch.go': el => openSheet({ type: 'edit', kind: 'item', coll: el.dataset.coll, list: el.dataset.list, id: el.dataset.id }),
   'search.go': el => {
     const type = el.dataset.type, id = el.dataset.id;
+    if (type === 'goal') return openGoal(id);
+    if (type === 'step') return openGoal(el.dataset.goal, id);
     const rec = (type === 'event' ? store.doc.events : store.doc.tasks).find(x => x.id === id && !x.deletedAt);
     if (!rec) return;
     if (type === 'task' && rec.plan.kind === 'none') { openSheet({ type: 'edit', kind: 'task', id }); return; }
@@ -729,6 +774,7 @@ const CLICK = {
   back: () => goBack(),
   fab: () => {
     if (ui.tab === 'calendar') return openQuick(ui.cal.sel);
+    if (ui.tab === 'goals') { const g = goalsRoute(store.doc, ui.goal); return g && g.route ? openSheet({ type: 'addsteps', id: g.route }) : openSheet({ type: 'newgoal' }); }
     if (ui.tab !== 'lists') return openQuick(ui.today);
     const r = listsRoute(store.doc, ui.list);
     if (!r || !r.fab) return;
@@ -876,6 +922,23 @@ const CLICK = {
   }),
   'tpl.restoreBuiltin': el => shut(() => A.restoreBuiltinTemplates(store, String(el.dataset.bases).split(',').filter(Boolean))),
 
+  // goals (0.7.0)
+  'goal.open': el => openGoal(el.dataset.id, el.dataset.step),
+  'menu.goal': () => { if (ui.goal) openSheet({ type: 'goalmenu', id: ui.goal }); },
+  'goal.noteOpen': el => openSheet({ type: 'goalnote', id: el.dataset.id }),
+  'goal.renameOpen': el => openSheet({ type: 'goalrename', id: el.dataset.id }),
+  'goal.reached': el => shut(() => A.setGoalReached(store, el.dataset.id, !!el.dataset.on)),
+  'goal.pause': el => shut(() => A.setGoalPaused(store, el.dataset.id, !!el.dataset.on)),
+  'goal.delete': el => shut(() => {
+    if (!confirmDelete()) return false;
+    const ok = withDeleteUndo('goals', el.dataset.id, 'undo.goalDeleted', () => A.softDelete(store, 'goals', el.dataset.id));
+    if (ok && ui.goal === el.dataset.id) { ui.goal = null; render(); }
+    return ok;
+  }),
+  'step.open': el => openSheet({ type: 'stepedit', goal: el.dataset.goal, id: el.dataset.id }),
+  'step.move': el => A.moveGoalStep(store, el.dataset.goal, el.dataset.id, Number(el.dataset.dir)),
+  'step.delete': el => shut(() => confirmDeleteItem() && withStepDeleteUndo(el.dataset.goal, el.dataset.id, () => A.deleteGoalStep(store, el.dataset.goal, el.dataset.id))),
+
   // calendar
   'cal.select': el => { ui.cal.sel = el.dataset.date; render(); },
   'cal.prev': () => { const n = shiftMonth(ui.cal.y, ui.cal.m, -1); Object.assign(ui.cal, { y: n.y, m: n.m }); calKeepSel(); render(); },
@@ -898,6 +961,7 @@ const CHANGE = {
   'cleanup.pick': el => { if (!ui.cleanup) return; const k = el.dataset.key; if (el.checked) ui.cleanup.sel.add(k); else ui.cleanup.sel.delete(k); render(); },
   'task.toggle': el => withTaskUndo(el.dataset.id, el.checked ? 'undo.checked' : 'undo.unchecked', () => A.setTaskDone(store, el.dataset.id, el.checked)),
   'milestone.toggle': el => A.setMilestoneDone(store, el.dataset.project, el.dataset.id, el.checked),
+  'step.toggle': el => withStepUndo(el.dataset.goal, el.dataset.id, el.checked ? 'undo.stepChecked' : 'undo.stepUnchecked', () => A.setGoalStepDone(store, el.dataset.goal, el.dataset.id, el.checked)),
   'item.toggle': el => A.setListItemDone(store, el.dataset.list, el.dataset.id, el.checked),
   'buy.toggle': el => { if (el.checked) A.markBought(store, el.dataset.id); },
   'prep.toggle': el => A.setPrepDone(store, el.dataset.event, el.dataset.id, el.checked),
@@ -972,6 +1036,17 @@ const FORMS = {
   // recurring tasks
   'series.add': f => shut(() => A.addSeries(store, seriesValues(f))),
   'series.edit': f => shut(() => A.editSeries(store, f.dataset.id, seriesValues(f), f.elements.namedItem('applyOpen').checked)),
+
+  // goals (0.7.0)
+  'goal.add': f => shut(() => {
+    const id = A.addGoal(store, { title: val(f, 'title'), steps: val(f, 'steps') });
+    if (id && typeof id === 'string') { ui.tab = 'goals'; ui.goal = id; render(); window.scrollTo(0, 0); }
+    return !!id;
+  }),
+  'steps.add': f => shut(() => A.addGoalSteps(store, f.dataset.goal, val(f, 'text'))),
+  'goal.note': f => shut(() => A.setGoalNote(store, f.dataset.goal, val(f, 'note'))),
+  'goal.rename': f => shut(() => A.renameGoal(store, f.dataset.goal, val(f, 'title'))),
+  'step.edit': f => shut(() => A.editGoalStep(store, f.dataset.goal, f.dataset.id, val(f, 'title'))),
 
   // calendar
   'cal.go': f => {
@@ -1059,13 +1134,14 @@ document.addEventListener('change', rememberOnboardingDraft);
 
 // ---------- swipe (indentation) and long press on rows ----------
 
-const ROW_SEL = '.trow, .tailrow, .erow, .wrow, .srow';
+const ROW_SEL = '.trow, .tailrow, .erow, .wrow, .srow, .gsrow';
 const SWIPE_MIN = 44;
 let gesture = null;
 
 function openRowMenu(row) {
   const id = row.dataset.id;
   if (!id) return;
+  if (row.matches('.gsrow')) { openSheet({ type: 'stepedit', goal: row.dataset.goal, id }); return; }
   const type = row.matches('.erow') ? 'eventmenu' : row.matches('.wrow') ? 'waitmenu' : row.matches('.srow') ? 'seriesmenu' : 'taskmenu';
   openSheet({ type, id, part: row.matches('.tailrow') ? row.querySelector('[data-part]') && row.querySelector('[data-part]').dataset.part : undefined });
 }

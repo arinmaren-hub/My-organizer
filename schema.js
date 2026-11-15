@@ -5,7 +5,7 @@
 // {
 //   schemaVersion: 4, dataId, createdAt, updatedAt,
 //   tasks: [Task], events: [Event], projects: [Project], lists: [List],
-//   series: [Series], waiting: [Waiting], templates: [Template],
+//   series: [Series], waiting: [Waiting], templates: [Template], goals: [Goal] (since schema 6),
 //   settings: { eveningPreview: { enabled, time }, day: { wake, bed, cutoff, setupDone } },
 //   quarantine: [ { at, source, collection, parentId, reason, record } ]
 // }
@@ -23,10 +23,12 @@ import { isPlainObject } from './util.js';
 //     optional `keep` («Хранить всегда») on tasks, events and lists; events may carry seriesId/occurrenceDate).
 // 5 is a version bump only: nothing is converted. It exists so that an older app can never read 0.6.0 data
 // (it would mistake an event series for a task series) — it goes read-only instead.
+// 6 = 0.7.0 (adds the `goals` collection: goals with ordered steps, «Цели»). Nothing is converted; an older
+//     app would silently drop the new collection when saving, so it must go read-only on version-6 data.
 // Every step only ADDS fields and collections with defaults, so upgrading never removes data.
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const STOCK_STATES = ['have', 'low', 'out'];
-export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists', 'series', 'waiting', 'templates'];
+export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists', 'series', 'waiting', 'templates', 'goals'];
 export const PLAN_KINDS = ['day', 'week', 'none'];
 export const REVIEW_CHOICES = ['moved', 'kept', 'done'];
 export const SERIES_FREQS = ['daily', 'weekly', 'monthly', 'yearly'];
@@ -59,7 +61,7 @@ export function emptyDoc(now) {
     dataId: null,
     createdAt: now,
     updatedAt: now,
-    tasks: [], events: [], projects: [], lists: [], series: [], waiting: [], templates: [],
+    tasks: [], events: [], projects: [], lists: [], series: [], waiting: [], templates: [], goals: [],
     settings: defaultSettings(),
     quarantine: []
   };
@@ -129,6 +131,13 @@ export function newSeries({ id, title, freq, interval = 1, mode = 'completion', 
     projectId: null,
     createdAt: now, updatedAt: now, deletedAt: null
   };
+}
+
+// A goal (0.7.0): something bigger the person wants, with the steps that lead to it, in order.
+// `note` is free text (ideas, books, links). `doneAt` = when the person marked the goal as reached.
+// Steps have the item shape (id, title, done, timestamps); a finished step also keeps `doneAt`.
+export function newGoal({ id, title, note = '', now }) {
+  return { id, title, note, steps: [], doneAt: null, createdAt: now, updatedAt: now, deletedAt: null };
 }
 
 export function newItem({ id, title, category = null, now }) {
@@ -357,7 +366,29 @@ function checkSeries(r, now) {
   return s ? fail(s) : { value: x };
 }
 
-const CHECK = { tasks: checkTask, events: checkEvent, projects: checkProject, lists: checkList, series: checkSeries, waiting: checkWaiting, templates: checkTemplate };
+// A goal (0.7.0). Steps are checked one by one like list items (a broken step is quarantined alone).
+function checkGoal(r, now) {
+  if (!isPlainObject(r)) return fail('reason.notObject');
+  const g = { ...r };
+  if (!isId(g.id)) return fail('reason.badId');
+  if (!isStr(g.title)) return fail('reason.noTitle');
+  g.note = g.note ?? '';
+  if (!isStr(g.note)) return fail('reason.badNote');
+  if (!Array.isArray(g.steps)) return fail('reason.stepsNotList');
+  g.doneAt = g.doneAt ?? null;
+  if (g.doneAt !== null && !isIso(g.doneAt)) return fail('reason.badCompletedAt');
+  if (g.keep !== true) delete g.keep;
+  // `pausedAt` (optional): the goal is on pause — its next step is not shown in «Задачи». Anything else is dropped.
+  if (g.pausedAt !== undefined && !isIso(g.pausedAt)) delete g.pausedAt;
+  const s = stamps(g, now);
+  if (s) return fail(s);
+  const { kept, bad } = checkNested(g.steps, 'steps', now);
+  // optional `doneAt` of a step: kept only while it is a real time and the step is finished
+  g.steps = kept.map(x => { if (x.doneAt !== undefined && (!x.done || !isIso(x.doneAt))) { const y = { ...x }; delete y.doneAt; return y; } return x; });
+  return { value: g, nested: bad };
+}
+
+const CHECK = { tasks: checkTask, events: checkEvent, projects: checkProject, lists: checkList, series: checkSeries, waiting: checkWaiting, templates: checkTemplate, goals: checkGoal };
 
 function normalizeSettings(input) {
   const def = defaultSettings();
@@ -520,7 +551,7 @@ export function findLostRecords(input, res) {
     if (loaded.some(r => !hasOriginal(originals, r))) return key;
   }
   // [collection, field, field name in the input, optional]; an event's `prep` (0.5.0) is optional.
-  const NESTED = [['projects', 'milestones', v1 ? 'steps' : 'milestones'], ['lists', 'items', 'items'], ['templates', 'items', 'items'], ['events', 'prep', 'prep', true]];
+  const NESTED = [['projects', 'milestones', v1 ? 'steps' : 'milestones'], ['lists', 'items', 'items'], ['templates', 'items', 'items'], ['events', 'prep', 'prep', true], ['goals', 'steps', 'steps']];
   for (const [key, field, inputField, optional] of NESTED) {
     if (!Array.isArray(input[key])) continue;
     const originals = byId(input[key]);
@@ -551,7 +582,7 @@ export function countActive(doc) {
     projects: doc.projects.filter(alive).length,
     lists: doc.lists.filter(alive).length,
     // Newer kinds of records appear in the counts only when there are some.
-    ...Object.fromEntries(['series', 'waiting', 'templates'].map(k => [k, doc[k].filter(alive).length]).filter(([, n]) => n > 0))
+    ...Object.fromEntries(['series', 'waiting', 'templates', 'goals'].map(k => [k, doc[k].filter(alive).length]).filter(([, n]) => n > 0))
   };
 }
 

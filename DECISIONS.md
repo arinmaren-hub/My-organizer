@@ -325,6 +325,31 @@ Built on the 0.5.2 recovery release (= the 0.5.0 code plus the repaired service 
 
 **Not done / decided against.** No new data for «Keep forever» on series occurrences; no cleanup of waiting items or projects; no per-record "age" UI; no automatic anything. The text-size setting, Projects tab, drag-and-drop, accounts, AI were not touched.
 
+## B15. What 0.7.0 built — «Цели» (owner's request of 2026-11-15) — decisions and deviations
+
+Built on 0.6.0, not rebuilt. Same address, same storage keys, same installed app.
+
+**Why a fifth tab.** The owner asked for a place for bigger plans that need several steps first (e.g. «записать аудиокнигу» ← «сделать тестовое задание»; «записаться на раскопки агоры» ← «написать поллали» ← «заполнить анкету»), with room for ideas and reading. Lists were considered and rejected for this (no goal as a thing, no «next step» in Tasks, finished items sink and break the order, no notes). The owner chose a **fifth bottom tab «Цели»**; this lifts the earlier «exactly four tabs» rule (B11.1) by the owner's decision. It is *not* the old Projects/Progress screen (that stays hidden, B11.2): no quantities, no progress bars.
+
+**Data format: schema 5 → 6.** New collection `goals` (see D). The version is raised because 0.6.0 would silently drop an unknown collection when saving; with 6 it goes read-only instead (tested with a real 0.6.0 window). Upgrade is automatic with a rollback copy, like every earlier one. Nothing in existing records changes.
+
+**Goal screen.** The note (free text; `http(s)://` addresses become links that open outside the app; everything else is shown as plain text) and the steps **in the order the person wrote them**. A finished step stays in its place (struck through) — unlike lists, because the order *is* the plan. The first unfinished step is marked «следующий шаг». «＋» adds steps (one per line, at the end). A tap on a step: rename, ↑ Выше / ↓ Ниже (no drag-and-drop), delete (asks; undo for 7 s). The header «···»: rename, note, pause / resume, goal reached / back to work, delete (to «Удалённые», 30 days, undo for 7 s). When every step is done, a quiet banner offers «Цель достигнута» — never automatic.
+
+**No pressure (owner, 2026-11-15: «чтобы не давило морально, но я не забывала»).**
+- Steps have **no dates and no deadlines**. They never become overdue, never go to «Хвосты», are never moved, counted in days or shown in red; there are no notifications.
+- In «Задачи» the next step of each goal in work is listed in **one folded line «Шаги к целям · N»**, placed after «На этой неделе» (it opens on a tap and closes again after a restart). Inside, a one-line note says steps have no dates and simply wait.
+- A goal can be put **on pause** (`pausedAt`): its step leaves «Задачи», the goal stays in «Цели» marked «на паузе». Reached goals fold into «Достигнутые».
+- «Сегодня», the evening overview and the morning/evening reviews do not show goals at all.
+- Ticking a step in «Задачи» or in the goal is the same action and can be undone; it never creates, changes or completes a task.
+
+**Search** also finds goals (by name, or by a word in the note) and their steps; they come after dated records; a tap opens the goal (and marks the step for a moment).
+
+**Cleanup** never offers or removes goals or steps (they are not in its list of eligible types). **Backups, imports, rollback copies, the lost-records check (R12), quarantine of a broken goal or a single broken step, 30-day purge of deleted goals/steps** all include the new collection.
+
+**Also fixed:** «Удалённые» showed raw keys (`kind.series`, `kind.waiting`, `kind.templates`) for deleted repeating rules, waiting items and templates; they now have names.
+
+**Not done.** No dates or reminders on steps (on purpose); no sub-steps; no linking a step to a task; no images or files in notes; links are not previewed.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure
@@ -424,9 +449,9 @@ Built on the 0.5.2 recovery release (= the 0.5.0 code plus the repaired service 
 
 ---
 
-## D. Data model (schema version 5)
+## D. Data model (schema version 6)
 
-Document: `{ schemaVersion: 5, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, settings, quarantine }`
+Document: `{ schemaVersion: 6, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, goals, settings, quarantine }`
 
 Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `settings.day` and `dataId`), 4 = 0.4.0 (adds the collections `series`, `waiting`, `templates`; task fields `review`, `seriesId`, `occurrenceDate`, `skipped`, `doneDay`; optional list `categories` and item `category`). Every upgrade only ADDS fields with empty defaults; no existing value is changed.
 
@@ -466,6 +491,8 @@ Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `
 **Added in 0.5.0 (all optional, schema stays 4, validated leniently — a wrong value is dropped, the record is kept):** task `indent` (`true` or absent); list `kind` (`'home'` only, the home inventory) and list-item `stock` (`'have'│'low'│'out'`); event `prep` (absent, or an array of items `{ id, title, done, createdAt, updatedAt, deletedAt }`; absent = no preparation created). 0.4.0 code that opens such data keeps these fields (tested).
 
 **Added in 0.6.0 (schema 5; all optional and validated leniently — a wrong value is dropped, the record is kept):** series `until` (date), `monthBy` (`'nth'│'last'`), `kind` (`'event'` only), `endTime` (`'HH:MM'`, events only), `skip` (sorted date list); event `seriesId`/`occurrenceDate` (both or neither); task, event and list `keep` (`true` or absent).
+
+**Added in 0.7.0 (schema 6):** collection `goals` — **Goal:** `id, title, note (string, default ''), steps ([{ id, title, done, createdAt, updatedAt, deletedAt, doneAt? }] in the person's order), doneAt (ISO or null = reached), pausedAt? (ISO; on pause), keep? (true), createdAt, updatedAt, deletedAt`. A goal without `note` gets `''`; a step's `doneAt` and a goal's `pausedAt` are dropped if not a valid time (record kept); a goal without an id/title or whose `steps` is not a list is quarantined; a single broken step is quarantined on its own.
 
 **Quarantine entry:** `{ at, source: 'load'│'import'│'legacy'│…, collection, parentId, reason, record }`.
 

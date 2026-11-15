@@ -22,6 +22,12 @@ export function searchResultsHtml(doc, s) {
   const found = searchRecords(doc, q);
   if (!found.length) return `<p class="muted">${esc(t('search.none'))}</p>`;
   const rows = found.map(r => {
+    if (r.type === 'goal' || r.type === 'step') {
+      const label = r.type === 'goal' ? t('search.goal') + (r.inNote ? ' · ' + t('search.inNote') : '') : t('search.step', { goal: r.goalTitle });
+      return `<button type="button" class="srch ${r.type}${r.done ? ' is-done' : ''}" data-action="search.go" data-type="${r.type}" data-id="${esc(r.id)}"${r.goalId ? ` data-goal="${esc(r.goalId)}"` : ''}>
+      <span class="stitle">${esc(r.title)}</span>
+      <span class="meta">${esc(label)}${r.done ? ` · ${esc(t(r.type === 'goal' ? 'search.reached' : 'search.done'))}` : ''}</span></button>`;
+    }
     const when = r.date ? `${r.planKind === 'week' ? t('plan.week', { day: { $day: r.date } }) : formatDay(r.date)}${r.time ? ', ' + r.time : ''}` : t('plan.none');
     const typeLabel = t(r.type === 'event' ? 'search.event' : 'search.task');
     return `<button type="button" class="srch ${r.type}${r.done ? ' is-done' : ''}" data-action="search.go" data-type="${r.type}" data-id="${esc(r.id)}">

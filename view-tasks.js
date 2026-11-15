@@ -1,4 +1,4 @@
-// «Задачи»: all tasks in three groups (by day, by week, no date); each row is a checkbox, the
+// «Задачи»: «Без даты», this week, then (0.7.0) the next step of each goal (folded), «Позже»; earlier: all tasks in three groups (by day, by week, no date); each row is a checkbox, the
 // title and «···». Recurring tasks are at the very bottom, folded; adding one is folded too.
 
 import { esc } from './util.js';
@@ -8,6 +8,8 @@ import { taskRow, empty, foldBlock, moreButton } from './components.js';
 import { SERIES_FREQS } from './schema.js';
 import { seriesHistory } from './recur.js';
 import { ICONS } from './icons.js';
+import { nextSteps } from './goals.js';
+import { stepRow } from './view-goals.js';
 
 export function ruleText(s) {
   return t(`recur.rule.${s.freq}.${s.interval === 1 ? '1' : 'n'}`, { n: s.interval });
@@ -79,6 +81,12 @@ export function renderTasks(doc, ctx) {
   const noDate = `<section class="group nodate"><h2>${esc(t('tasks.none'))}${scr.none.length ? ` <span class="count">${scr.none.length}</span>` : ''}
       <button type="button" class="h2-plus" data-action="nodate.open" aria-label="${esc(t('tasks.noDateAdd'))}">${ICONS.plus}</button></h2>
       ${scr.none.length ? scr.none.map(x => taskRow(x)).join('') : empty(t('tasks.noDateEmpty'))}</section>`;
+  // 0.7.0: the next unfinished step of every goal in work, folded by default (one calm line with a count), so the goals
+  // are not forgotten but do not press. Steps have no dates: nothing here ever becomes overdue or a «tail».
+  const ns = nextSteps(doc);
+  const goalSteps = ns.length ? foldBlock('goalsteps', t('tasks.goalSteps'),
+    `<p class="muted small">${esc(t('tasks.goalStepsHint'))}</p>${ns.map(x => stepRow(x.goal, x.step, { inTasks: true })).join('')}`,
+    { count: String(ns.length), cls: 'goalsteps' }) : '';
   const weekCount = scr.week.days.reduce((n, g) => n + g.tasks.length, 0) + scr.week.noDay.length;
   const weekBody = scr.week.days.map(groupRows).join('') +
     (scr.week.noDay.length ? `<h3 class="sub">${esc(t('tasks.weekNoDay'))}</h3>${scr.week.noDay.map(x => taskRow(x)).join('')}` : '');
@@ -86,5 +94,5 @@ export function renderTasks(doc, ctx) {
       ${weekBody || empty(t('tasks.weekEmpty'))}</section>`;
   const later = foldBlock('later', t('tasks.later'), scr.later.length ? scr.later.map(groupRows).join('') : empty(t('tasks.laterEmpty')),
     { count: scr.laterCount ? String(scr.laterCount) : null, cls: 'later' });
-  return noDate + week + later + recurring(doc, ctx.today);
+  return noDate + week + goalSteps + later + recurring(doc, ctx.today);
 }

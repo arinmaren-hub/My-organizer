@@ -69,11 +69,11 @@ CONTRAST_JS = """() => {
 }"""
 
 STR = {
-    'ru': {'gearLabel': 'Настройки и меню', 'cal_month': 'Октябрь 2026', 'wd': 'Пн', 'sun': 'Вс', 'tabs': ['Сегодня', 'Календарь', 'Задачи', 'Списки'], 'weekday': 'Пятница', 'date': '9 октября',
+    'ru': {'gearLabel': 'Настройки и меню', 'cal_month': 'Октябрь 2026', 'wd': 'Пн', 'sun': 'Вс', 'tabs': ['Сегодня', 'Календарь', 'Задачи', 'Списки', 'Цели'], 'weekday': 'Пятница', 'date': '9 октября',
            'edit': 'Изменить', 'move': 'Перенести…', 'dup': 'Дублировать', 'wait': 'Ожидаю от других', 'del': 'Удалить', 'toEvent': 'Сделать событием', 'toTask': 'Сделать задачей',
            'add': 'Добавить', 'buy': 'Купить', 'home': 'Дом', 'out': 'Закончилось', 'low': 'Заканчивается', 'have': 'Есть', 'tails': 'Хвосты', 'prepAdd': 'Добавить подготовку', 'prep': 'Подготовка',
            'rename': 'Переименовать', 'cats': 'Категории', 'saveTpl': 'Сохранить как шаблон', 'blank': 'Пустой список', 'tplManage': 'Шаблоны…'},
-    'en': {'gearLabel': 'Settings and menu', 'cal_month': 'October 2026', 'wd': 'Mon', 'sun': 'Sun', 'tabs': ['Today', 'Calendar', 'Tasks', 'Lists'], 'weekday': 'Friday', 'date': 'October 9',
+    'en': {'gearLabel': 'Settings and menu', 'cal_month': 'October 2026', 'wd': 'Mon', 'sun': 'Sun', 'tabs': ['Today', 'Calendar', 'Tasks', 'Lists', 'Goals'], 'weekday': 'Friday', 'date': 'October 9',
            'edit': 'Edit', 'move': 'Reschedule…', 'dup': 'Duplicate', 'wait': 'Waiting for others', 'del': 'Delete', 'toEvent': 'Make it an event', 'toTask': 'Make it a task',
            'add': 'Add', 'buy': 'Buy', 'home': 'Home', 'out': 'Out', 'low': 'Running low', 'have': 'In stock', 'tails': 'Tails', 'prepAdd': 'Add preparation', 'prep': 'Preparation',
            'rename': 'Rename', 'cats': 'Categories', 'saveTpl': 'Save as template', 'blank': 'Blank list', 'tplManage': 'Templates…'},
@@ -482,7 +482,7 @@ with sync_playwright() as p:
                         task('o2', 'Полив', 'day', '2026-10-09', seriesId='sr1', occurrenceDate='2026-10-09')], series=[sr])
         s = Session(lang, data=d); pg = s.pg
         dd = s.doc()
-        check(L + 'Старые данные 0.5.2: схема 5, правило и повторы без изменений', dd['schemaVersion'] == 5 and dd['series'][0] == {**sr, 'updatedAt': dd['series'][0]['updatedAt']} or dd['series'][0]['id'] == 'sr1' and 'until' not in dd['series'][0], str(dd['series'][0]))
+        check(L + 'Старые данные 0.5.2: схема 6, правило и повторы без изменений', dd['schemaVersion'] == 6 and dd['series'][0] == {**sr, 'updatedAt': dd['series'][0]['updatedAt']} or dd['series'][0]['id'] == 'sr1' and 'until' not in dd['series'][0], str(dd['series'][0]))
         check(L + 'Старые данные: выполненный повтор в истории, новые не продублированы', len([t for t in s.tasks() if t['seriesId'] == 'sr1' and t['occurrenceDate'] == '2026-10-09']) == 1 and next(t for t in s.tasks() if t['id'] == 'o1')['done'])
         check(L + 'Старые данные: копия перед обновлением формата сохранена', pg.evaluate("localStorage.getItem('organizer:rollback')") is not None and len(pg.evaluate("localStorage.getItem('organizer:rollback')")) > 100)
         s.tab('tasks')
@@ -688,7 +688,7 @@ with sync_playwright() as p:
         pg.click('#sheet-root form[data-form="nodate.add"] button[type=submit]')
         s.reload(); s.tab('tasks')
         check(L + 'После перезапуска задачи без даты на месте', 'Сохранится' in pg.inner_text('.group.nodate') and 'И это' in pg.inner_text('.group.nodate'))
-        check(L + 'Схема данных 5 после первого запуска 0.6.0 на данных 0.5.2', s.doc()['schemaVersion'] == 5)
+        check(L + 'Схема данных 6 после первого запуска 0.7.0 на данных 0.5.2', s.doc()['schemaVersion'] == 6)
         foreign = [u for u in s.requests if not u.startswith(BASE)]
         check(L + 'Все запросы — только к файлам приложения', not foreign, str(foreign[:3]))
         check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))

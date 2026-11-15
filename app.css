@@ -206,7 +206,7 @@ nav#nav[hidden] { display: none; }
 /* rows: a checkbox, a title, a small line, one «···» */
 .list { margin: 4px 0 8px; }
 .row { align-items: center; padding: 8px 0; }
-.trow, .erow, .wrow, .srow, .tailrow { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: padding-left .15s ease; }
+.trow, .erow, .wrow, .srow, .tailrow, .gsrow { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: padding-left .15s ease; }
 .trow.swiping { transition: none; }
 .trow.indent { padding-left: 28px; }
 .trow input[type=checkbox], .irow input[type=checkbox] { margin: 0; }
@@ -279,7 +279,7 @@ h3.sub { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 
 @media (max-width: 380px) { .sheet .editform .field { flex-direction: column; align-items: stretch; gap: 4px; } .sheet .editform .field input:not([type=checkbox]), .sheet .editform .field select { max-width: 100%; } }
 
 /* 0.5.0 (2): calmer task rows — no divider lines (spacing only), round checkboxes, no per-row «···» */
-.trow, .erow, .tailrow { border-bottom: none; min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
+.trow, .erow, .tailrow, .gsrow { border-bottom: none; min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
 .tailrow { margin-bottom: 8px; }
 .trow input[type=checkbox], .irow input[type=checkbox] {
   -webkit-appearance: none; appearance: none; position: relative; width: 24px; height: 24px; border-radius: 50%;
@@ -312,3 +312,11 @@ h3.sub { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 
 .crow .keep { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; }
 .cleanup-card { margin-top: 0; }
 .sheet select, .editform select { max-width: 100%; min-width: 0; }
+
+/* 0.7.0: «Цели» */
+.goalnote { margin: 8px 0 4px; }
+.goalnote .note { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.45; padding: 4px 0; }
+.goalnote .note a { color: var(--ink); text-decoration: underline; }
+.gsrow.next .meta { color: var(--ink); font-weight: 600; }
+.goalsteps .gsrow .meta { color: var(--muted); font-weight: 400; }
+.goalrow .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

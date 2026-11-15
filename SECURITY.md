@@ -70,6 +70,11 @@ How to run them yourself: `TESTING.md`, section 6.
 - **Cleanup removes records for real** from the main data after you save a backup and confirm. Limit: the app's own safety copies (`organizer:snapshots`, `organizer:rollback`) taken earlier still contain them until they rotate out; they stay on the same device, in the same browser storage. If you need the removed records gone from the device completely, remove the old copies in ⚙ → «Копии и данные» → «Автокопии» as well.
 - **The backup file** you save for a cleanup is an ordinary JSON export: it contains your data in plain text; keep it somewhere private (`SECURITY.md` §3, items 5–6).
 
+## 4b. What 0.7.0 adds to the privacy picture
+
+- **No new network code, no third-party resources, CSP unchanged.** Goals, steps and notes are stored in the same data document (`organizer:data`) and travel only in your own backups.
+- **Links in a goal's note** are shown as ordinary links (`http`/`https` only, `rel="noopener noreferrer"`, opened outside the app). The app never fetches them, previews them or sends anything to them; a request happens only when you tap a link yourself. Everything else in a note is shown as plain text (no HTML is interpreted; tested).
+
 ## 5. Keeping it this way
 
 Every future version must keep `DECISIONS.md` section G (P1–P8): no network code, no third-party resources, the CSP unchanged, data only under `organizer:*` keys, imports always confirmed, no silent sync, the app on its own origin before it is shared, and `privacy-test.py` passing before release. A change to any of these needs an explicit decision recorded in `DECISIONS.md` and an update of this file.

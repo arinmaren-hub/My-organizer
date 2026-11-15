@@ -17,6 +17,8 @@ import { MODES } from './appearance.js';
 import { searchBody } from './view-search.js';
 import { confirmBody } from './view-cleanup.js';
 import { taskConversionLosses, eventConversionLosses } from './actions.js';
+import { findGoal } from './goals.js';
+import { newGoalBody, addStepsBody, noteBody, renameBody, stepBody, goalMenuItems } from './view-goals.js';
 
 const alive = r => !r.deletedAt;
 const find = (arr, id) => (arr || []).find(x => x.id === id && alive(x)) || null;
@@ -377,7 +379,30 @@ function seriesNewSheet(doc, ctx) {
     <div class="line"><button type="submit" class="primary">${esc(t('recur.add'))}</button></div></form>`);
 }
 
+// ---------- goals (0.7.0) ----------
+
+function goalSheet(fn, titleOf) {
+  return (doc, ctx, s) => {
+    const g = findGoal(doc, s.id);
+    return g ? sheet(titleOf(g), fn(g), 'sheet-quick') : '';
+  };
+}
+const newGoalSheet = () => sheet(t('goals.new'), newGoalBody(), 'sheet-quick');
+const addStepsSheet = goalSheet(addStepsBody, () => t('goals.addSteps'));
+const goalNoteSheet = goalSheet(noteBody, () => t('goals.note'));
+const goalRenameSheet = goalSheet(renameBody, () => t('goals.rename'));
+function goalMenu(doc, ctx, s) {
+  const g = findGoal(doc, s.id);
+  return g ? sheet(g.title, menu(goalMenuItems(g, item))) : '';
+}
+function stepSheet(doc, ctx, s) {
+  const g = findGoal(doc, s.goal);
+  const x = g && find(g.steps, s.id);
+  return x ? sheet(g.title, stepBody(g, x)) : ''; // the goal's name on top: which chain this step belongs to
+}
+
 const SHEETS = {
+  newgoal: newGoalSheet, addsteps: addStepsSheet, goalnote: goalNoteSheet, goalrename: goalRenameSheet, goalmenu: goalMenu, stepedit: stepSheet,
   appmenu: appMenu, quick: quickSheet, taskmenu: taskMenu, eventmenu: eventMenu, waitmenu: waitMenu, seriesmenu: seriesMenu,
   move: moveSheet, pick: pickSheet, edit: editSheet, event: eventSheet, prepedit: prepEditSheet, convert: convertSheet,
   waitadd: waitAddSheet, newlist: newListSheet, newtpl: newTemplateSheet, additems: addItemsSheet, addhome: addHomeSheet,

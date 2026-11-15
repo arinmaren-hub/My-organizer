@@ -16,6 +16,7 @@ import { parseDateKey, isDateKey, isDateTime, timeOf } from './dates.js';
 import { RU4, EN4, NAMES } from './i18n-v4.js';
 import { RU5, EN5 } from './i18n-v5.js';
 import { RU6, EN6 } from './i18n-v6.js';
+import { RU7, EN7 } from './i18n-v7.js';
 
 export const LANGS = ['ru', 'en'];
 // Each language is named in its own language, as is usual.
@@ -699,6 +700,8 @@ Object.assign(RU, RU5);
 Object.assign(EN, EN5);
 Object.assign(RU, RU6);
 Object.assign(EN, EN6);
+Object.assign(RU, RU7);
+Object.assign(EN, EN7);
 
 export const DICTS = { ru: RU, en: EN };
 
@@ -723,7 +726,7 @@ function resolveParam(v) {
 // «задач 3, событий 1, …» plus the newer kinds of records, only when there are some.
 export function countsText(c) {
   let s = t('counts', c);
-  for (const k of ['series', 'waiting', 'templates']) if (c[k]) s += ', ' + t('counts.' + k, { n: c[k] });
+  for (const k of ['series', 'waiting', 'templates', 'goals']) if (c[k]) s += ', ' + t('counts.' + k, { n: c[k] });
   return s;
 }
 

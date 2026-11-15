@@ -69,11 +69,11 @@ CONTRAST_JS = """() => {
 }"""
 
 STR = {
-    'ru': {'gearLabel': 'Настройки и меню', 'cal_month': 'Октябрь 2026', 'wd': 'Пн', 'sun': 'Вс', 'tabs': ['Сегодня', 'Календарь', 'Задачи', 'Списки'], 'weekday': 'Пятница', 'date': '9 октября',
+    'ru': {'gearLabel': 'Настройки и меню', 'cal_month': 'Октябрь 2026', 'wd': 'Пн', 'sun': 'Вс', 'tabs': ['Сегодня', 'Календарь', 'Задачи', 'Списки', 'Цели'], 'weekday': 'Пятница', 'date': '9 октября',
            'edit': 'Изменить', 'move': 'Перенести…', 'dup': 'Дублировать', 'wait': 'Ожидаю от других', 'del': 'Удалить', 'toEvent': 'Сделать событием', 'toTask': 'Сделать задачей',
            'add': 'Добавить', 'buy': 'Купить', 'home': 'Дом', 'out': 'Закончилось', 'low': 'Заканчивается', 'have': 'Есть', 'tails': 'Хвосты', 'prepAdd': 'Добавить подготовку', 'prep': 'Подготовка',
            'rename': 'Переименовать', 'cats': 'Категории', 'saveTpl': 'Сохранить как шаблон', 'blank': 'Пустой список', 'tplManage': 'Шаблоны…'},
-    'en': {'gearLabel': 'Settings and menu', 'cal_month': 'October 2026', 'wd': 'Mon', 'sun': 'Sun', 'tabs': ['Today', 'Calendar', 'Tasks', 'Lists'], 'weekday': 'Friday', 'date': 'October 9',
+    'en': {'gearLabel': 'Settings and menu', 'cal_month': 'October 2026', 'wd': 'Mon', 'sun': 'Sun', 'tabs': ['Today', 'Calendar', 'Tasks', 'Lists', 'Goals'], 'weekday': 'Friday', 'date': 'October 9',
            'edit': 'Edit', 'move': 'Reschedule…', 'dup': 'Duplicate', 'wait': 'Waiting for others', 'del': 'Delete', 'toEvent': 'Make it an event', 'toTask': 'Make it a task',
            'add': 'Add', 'buy': 'Buy', 'home': 'Home', 'out': 'Out', 'low': 'Running low', 'have': 'In stock', 'tails': 'Tails', 'prepAdd': 'Add preparation', 'prep': 'Preparation',
            'rename': 'Rename', 'cats': 'Categories', 'saveTpl': 'Save as template', 'blank': 'Blank list', 'tplManage': 'Templates…'},
@@ -199,7 +199,7 @@ with sync_playwright() as p:
         L = f'[{lang}] '; S = STR[lang]
         s = Session(lang, data=BASE_DOC()); pg = s.pg
         navs = pg.locator('nav#nav button')
-        check(L + 'Нижняя панель: ровно 4 вкладки с подписями', navs.count() == 4 and [x.strip() for x in navs.all_inner_texts()] == S['tabs'], str(navs.all_inner_texts()))
+        check(L + 'Нижняя панель: ровно 5 вкладок с подписями (0.7.0: «Цели»)', navs.count() == 5 and [x.strip() for x in navs.all_inner_texts()] == S['tabs'], str(navs.all_inner_texts()))
         check(L + 'Нижняя панель: у каждой вкладки есть значок', all(navs.nth(i).locator('svg').count() == 1 for i in range(4)))
         check(L + 'Нижняя панель: вкладок «Прогресс» и «Данные» нет', pg.locator('nav#nav [data-tab="projects"], nav#nav [data-tab="data"]').count() == 0)
         nb = pg.locator('nav#nav').bounding_box()
@@ -236,7 +236,7 @@ with sync_playwright() as p:
         check(L + 'Меню закрывается нажатием на затемнение', s.no_sheet())
         # tabs
         for i, name in enumerate(S['tabs']):
-            s.tab(['today', 'calendar', 'tasks', 'lists'][i])
+            s.tab(['today', 'calendar', 'tasks', 'lists', 'goals'][i])
             check(L + f'Вкладка «{name}»: открывается, подсвечена', pg.locator('nav#nav button.active').inner_text().strip() == name and pg.locator('nav#nav button[aria-current="page"]').count() == 1)
         s.tab('today')
         # FAB geometry
@@ -951,7 +951,7 @@ with sync_playwright() as p:
         s = Session(lang, data=v4); pg = s.pg
         d = s.doc()
         keep = {k: d[k] for k in ('tasks', 'events', 'lists', 'templates', 'waiting')}
-        check(L + 'Данные 0.4.0 переходят на формат 5 (0.6.0), тот же dataId', d['schemaVersion'] == 5 and d['dataId'] == 'e2e-org')
+        check(L + 'Данные 0.4.0 переходят на формат 6 (0.7.0), тот же dataId', d['schemaVersion'] == 6 and d['dataId'] == 'e2e-org')
         check(L + 'Ничего не потеряно: задачи, события, списки, шаблоны, ожидания идентичны', json.dumps(keep, sort_keys=True) == json.dumps({k: v4[k] for k in keep}, sort_keys=True))
         check(L + 'Свой список «Купить» цел и отдельный от созданного «Купить»', any(l['id'] == 'ol2' and l['name'] == 'Купить' for l in d['lists']) and not any(l.get('kind') == 'home' for l in d['lists']))
         s.tab('lists')
@@ -1033,7 +1033,7 @@ with sync_playwright() as p:
             s = Session(lang, data=audit_doc(), when='2026-10-09T09:00:00+03:00'); pg = s.pg
             pg.set_viewport_size({'width': 320, 'height': 568})
             pg.wait_for_timeout(200)
-            check(L + 'Нижняя панель: 4 вкладки помещаются, подписи не обрезаны', pg.evaluate("""() => [...document.querySelectorAll('nav#nav button')].every(b => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= 321)"""))
+            check(L + 'Нижняя панель: 5 вкладок помещаются, подписи не обрезаны', pg.evaluate("""() => [...document.querySelectorAll('nav#nav button')].every(b => b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= 321)"""))
             for tabname in ['today', 'calendar', 'tasks', 'lists']:
                 s.tab(tabname)
                 check(L + f'{tabname}: нет горизонтальной прокрутки и вылезаний', pg.evaluate('document.documentElement.scrollWidth') <= 320 and not pg.evaluate(OVERFLOW_JS), str(pg.evaluate(OVERFLOW_JS)))

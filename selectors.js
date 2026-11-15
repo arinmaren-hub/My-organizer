@@ -123,6 +123,7 @@ export function deletedRecords(doc) {
   for (const x of doc.series) if (x.deletedAt) out.push({ collection: 'series', id: x.id, label: x.title, deletedAt: x.deletedAt });
   for (const w of doc.waiting) if (w.deletedAt) out.push({ collection: 'waiting', id: w.id, label: w.title, deletedAt: w.deletedAt });
   for (const x of doc.templates) if (x.deletedAt) out.push({ collection: 'templates', id: x.id, label: x.name, deletedAt: x.deletedAt });
+  for (const g of doc.goals || []) if (g.deletedAt) out.push({ collection: 'goals', id: g.id, label: g.title, deletedAt: g.deletedAt });
   return out.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
 }
 

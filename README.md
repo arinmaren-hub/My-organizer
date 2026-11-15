@@ -1,4 +1,4 @@
-# Мой органайзер — version 0.6.0
+# Мой органайзер — version 0.7.0
 
 A personal organizer that runs entirely on your iPhone or iPad: tasks, events, projects and lists.
 No account, no cloud, no AI. Your data stays on the device; you keep backups yourself.
@@ -74,12 +74,13 @@ If the new app is ever opened at the same address where the prototype stored dat
 
 Looking and ticking are the default; changing things appears only when you ask (tap a title, long-press a row, or «＋»).
 
-- **Four tabs at the bottom:** Сегодня, Календарь, Задачи, Списки.
+- **Five tabs at the bottom:** Сегодня, Календарь, Задачи, Списки, Цели.
 - **«＋» (bottom right)** adds things. On Сегодня and Задачи it opens a multi-line field: **one line = one task**, one «Добавить» saves them all. A task gets today (your planning day) — or, from the Calendar, the selected date — unless the text names a date («завтра», «в пятницу», «до пятницы», «Oct 15» …). A clock time asks «Задача / Событие / Только название». Inside a list it adds items; on Списки it creates a list (blank, from a template, or manage templates).
 - **Сегодня** — the weekday and your planning date at the top left, today's checklist, a folded **Хвосты** section (unfinished tasks from earlier days: «Сегодня», «Завтра», «Выбрать дату», «Готово»; «Оставить как есть» is in the task's long-press menu; nothing moves by itself), a link to **Вечер**, and **Ожидаю от других** at the very bottom. «Сегодня» is **your** day: it changes at the time set in «День заканчивается в», not at midnight.
 - **Rows** show a round checkbox, the title and a small date/time — no buttons and no divider lines. Tap the title to edit; a **long press** (or right click) offers Изменить, Перенести, Дублировать, Ожидаю от других, Сделать событием, Удалить. **Swipe a task to the right** to indent it one level (left to undo).
 - **Календарь** — a month grid (Monday first) and a year view. Tap a date for its events and tasks; «＋» adds to that date. An event's details hold an optional collapsed **Подготовка** checklist.
-- **Задачи** — all tasks by day / week / no date; **recurring tasks** are folded at the bottom.
+- **Задачи** — «Без даты» first (small «+» for several lines), «На этой неделе» by day, a folded «Шаги к целям» (the next step of each goal), a folded «Позже», and **recurring tasks** folded at the bottom. The magnifier searches tasks, events and goals.
+- **Цели** — bigger plans with a note (ideas, books, links) and steps in order. Tick a step and the next one becomes «следующий шаг». Steps have no dates and never become «хвосты»; a goal can be paused. «···» in a goal: rename, note, pause, goal reached, delete.
 - **Списки** — **Купить** (made automatically from home items that ran out), **Дом** (what you have at home: Есть / Заканчивается / Закончилось), and your lists with categories and templates (Supermarket, Suitcase Packing, your own). Management is in a list's «···».
 - **⚙ (gear) at the top right of Сегодня** — Вечер, Настройки (your day, evening overview), Копии и данные (backups, restore, automatic copies, deleted items), О приложении, «Завершить день», language (Русский / English) and appearance (Светлое / Тёмное / Как в системе). Language is chosen by hand and never follows the phone's language. «Прогресс» (projects) is hidden; it shows up here only if you already have projects.
 
@@ -92,7 +93,7 @@ Something went wrong after an import or an update? **⚙ → Копии и да�
 
 ## 5. Publishing a new version (for whoever changes the code)
 
-0. **Updating an existing installation (0.5.2 → 0.6.0, and older):** first save a backup (⚙ → «Копии и данные» → «Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address) — see `CHANGESET.md` for the exact list, for the *changed-only* package, and for what to delete. **Upload `sw.js` last** (or all files in one commit): installed copies update when they see the new `sw.js`. Open the installed app → «Доступна новая версия» → «Обновить». From 0.4.0 there is **no data migration** (the format is the same); older versions are upgraded automatically with a copy kept in «Копии и данные → Автокопии».
+0. **Updating an existing installation (0.6.0 → 0.7.0, and older):** first save a backup (⚙ → «Копии и данные» → «Сохранить копию»). Upload the files to the **same repository, same names** (do not change the address) — see `CHANGESET.md` for the exact list, for the *changed-only* package, and for what to delete. **Upload `sw.js` last** (or all files in one commit): installed copies update when they see the new `sw.js`. Open the installed app → «Доступна новая версия» → «Обновить». 0.7.0 moves the data format to schema 6 (0.6.0 used 5): the data is converted automatically on the first start, and the exact previous data is kept as a copy in «Копии и данные → Автокопии» («перед обновлением формата данных»). A window still running the old version becomes read-only and writes nothing.
 1. Change the files. Follow `DECISIONS.md` sections E, F (data preservation) and G (privacy).
 2. Set the same new version in `version.js` (`APP_VERSION`) and `sw.js` (`VERSION`). New file? Add it to `ASSETS` in `sw.js`.
 3. Run the release gate (`TESTING.md`, section 6): `tests.html` all green, and `e2e-v6-test.py`, `e2e-v5-test.py`, `e2e-test.py`, `privacy-test.py`, `upgrade-test.py` (from every earlier version) all passing. **If a migration or isolation test fails, do not publish.**

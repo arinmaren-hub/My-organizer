@@ -1,7 +1,7 @@
 // Unified search over tasks and events (0.6.0). Pure and read-only: it only looks at the data,
 // it never changes it, keeps no index and talks to nothing outside the device.
 //
-// What is searched: titles of tasks (open, done, without a date, recurring occurrences) and events
+// What is searched (0.7.0 adds goals: their titles, notes and step titles): titles of tasks (open, done, without a date, recurring occurrences) and events
 // (past, current, upcoming, occurrences of repeating events). Deleted records and occurrences the
 // user skipped are not shown. Case does not matter; «ё» and «е» are the same letter; every word
 // typed must appear in the title (in any order).
@@ -19,7 +19,7 @@ function matches(title, words) {
   return words.every(w => n.includes(w));
 }
 
-// A result: { type: 'task'|'event', id, title, date: 'YYYY-MM-DD'|null, time: 'HH:MM'|null,
+// A result: { type: 'task'|'event'|'goal'|'step', id, (step: goalId, goalTitle; goal: inNote) title, date: 'YYYY-MM-DD'|null, time: 'HH:MM'|null,
 //             done, planKind: 'day'|'week'|'none'|'event', recurring }
 export function searchRecords(doc, query, { limit = MAX_RESULTS } = {}) {
   const words = queryWords(query);
@@ -36,10 +36,22 @@ export function searchRecords(doc, query, { limit = MAX_RESULTS } = {}) {
     if (e.deletedAt || !matches(e.title, words)) continue;
     out.push({ type: 'event', id: e.id, title: e.title, date: e.start.slice(0, 10), time: e.start.slice(11, 16), done: false, planKind: 'event', recurring: !!e.seriesId });
   }
+  // 0.7.0: goals (title or note) and their steps. They have no date, so they come after the dated records.
+  for (const g of doc.goals || []) {
+    if (g.deletedAt) continue;
+    const inTitle = matches(g.title, words), inNote = !inTitle && matches(g.note || '', words);
+    if (inTitle || inNote) out.push({ type: 'goal', id: g.id, title: g.title, date: null, time: null, done: !!g.doneAt, planKind: 'goal', recurring: false, inNote });
+    for (const x of g.steps || []) {
+      if (x.deletedAt || !matches(x.title, words)) continue;
+      out.push({ type: 'step', id: x.id, goalId: g.id, goalTitle: g.title, title: x.title, date: null, time: null, done: !!x.done, planKind: 'step', recurring: false });
+    }
+  }
   // Newest first; records without a date go last; on one date later times first, events before tasks.
+  const RANK = { event: 0, task: 1, goal: 2, step: 3 };
   out.sort((a, b) => {
     if (a.date !== b.date) return a.date === null ? 1 : b.date === null ? -1 : b.date.localeCompare(a.date);
-    if (a.type !== b.type) return a.type === 'event' ? -1 : 1;
+    if (a.type !== b.type) return RANK[a.type] - RANK[b.type];
+    if (!!a.inNote !== !!b.inNote) return a.inNote ? 1 : -1; // a goal found by its name before one found in its note
     const ta = a.time || '', tb = b.time || '';
     if (ta !== tb) return tb.localeCompare(ta);
     return a.title.localeCompare(b.title);

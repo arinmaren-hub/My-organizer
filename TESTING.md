@@ -1,33 +1,33 @@
-# TESTING.md — version 0.6.0
+# TESTING.md — version 0.7.0
 
-## 1. What was actually tested (2026-10-11, by Claude)
+## 1. What was actually tested (2026-11-15, by Claude)
 
-**Environment:** headless **Chromium 141** driven by **Playwright 1.56** on Linux, iPhone-sized screen (390 × 844, touch; 320 px for a narrow check), local http server, simulated clock where dates matter. **Only Chromium. No WebKit, no Safari, no real iPhone or iPad.** Swipe, long-press, keyboard and safe-area behaviour were simulated, not felt on a device.
+**Environment:** headless **Chromium 153** driven by **Playwright 1.63** on Linux. The screen was iPhone-sized (390 × 844, touch), plus 320 px for a narrow check, served from a local http server with a simulated clock where dates matter. **Only Chromium was used: no WebKit, no Safari, no real iPhone or iPad.** Swipe, long press, the keyboard and safe areas were simulated, not tried on a device.
 
-Results are from the final code, in one run after the last code change:
+All results come from one run on the final code, after the last code change:
 
 | Test set | Result | Notes |
 |---|---|---|
-| `tests.html` unit tests | **340 / 340** in each of five time zones | UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Auckland, Europe/Athens. About 32 new tests for 0.6.0: search, week boundaries, recurrence (end date, nth weekday, last, skip, event series), undo guards, cleanup eligibility/protection/removal, schema 5, RU/EN key parity. |
-| `e2e-v6-test.py` — new 0.6.0 click-through | **350 / 350** | Real browser. Tasks screen (No Date, This Week, Later), week boundaries on Sunday/Monday, «+» multi-line, search and highlight, Calendar history, undo (tick, move, delete, list item, event item), recurring events and old series, list search and multi-add, cleanup reminder / review / grace / bulk / keep, persistence after reload, offline, Russian and English × light and dark contrast audit, 320 px layout. |
-| `e2e-v5-test.py` — 0.5.x click-through (adapted to the new Tasks screen) | **723 / 723** | Expectations changed on purpose: schema 5, finished tasks leave Tasks, unfinished prep items first, 5-item list menu. |
-| `e2e-test.py` — legacy scenario | **125 / 125** | |
-| `privacy-test.py` | **38 / 38** | Server saw only `GET` requests for the app's own files. |
-| `upgrade-test.py` — real service-worker update, two people side by side | 0.2.0, 0.2.1, 0.2.2: **47 / 47**; 0.3.0: **46 / 46**; 0.4.0: **46 / 46**; 0.5.0: **47 / 47**; **0.5.2: 47 / 47** → 0.6.0 | Includes: records identical field by field, automatic pre-upgrade rollback copy (schema 4 → 5), an old window going read-only on newer data. |
+| `tests.html` unit tests | **360 / 360** in each of five time zones | UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Auckland, Europe/Athens. 20 new tests for 0.7.0 cover: the upgrade from 0.6.0 (schema 5 → 6), newer data staying read-only, checking goals and quarantining a single step, the lost-records check for steps, creating goals, ticking and undoing steps, moving steps (deleted ones ignored), deleting and restoring steps and goals, goal reached, pause, steps never getting dates or turning into «хвосты» as days pass, goals not touching tasks, the 30-day purge, search, backup round trip, cleanup never touching goals, counts, and note links/escaping. |
+| `e2e-v7-test.py`, new 0.7.0 click-through | **276 / 276** | Real browser, Russian and English. Covers: five tabs; creating a goal with steps; the next-step marker; ticking with Undo; the note (link opens outside the app, typed HTML shown as text); adding steps; ↑/↓ and renaming; deleting a step with Undo; long press on a step; progress on the index; persistence after reload. «Шаги к целям» in Задачи: its place, folded by default, the hint text, ticking with Undo, a tap opening the goal with the step highlighted, pause and resume. Goal reached, the «Достигнутые» fold, deleting a goal with Undo, restoring from «Удалённые», search for goals, notes and steps, read-only on newer data, offline. A contrast and overflow audit covered 11 screens × RU/EN × light/dark, and a 320 px check covered nav labels and goal screens. |
+| `e2e-v6-test.py`, 0.6.0 click-through | **350 / 350** | Only the schema number changed (5 → 6). |
+| `e2e-v5-test.py`, 0.5.x click-through | **725 / 725** | Five tabs instead of four; schema 6. |
+| `e2e-test.py`, legacy scenario | **125 / 125** | Five tabs; backup schema 6. |
+| `privacy-test.py` | **38 / 38** | The server saw only `GET` requests for the app's own files. |
+| `upgrade-test.py`: real service-worker update, two people side by side | **0.6.0: 47 / 47**; 0.5.2: 47 / 47; 0.5.0: 47 / 47; 0.4.0: 46 / 46; 0.3.0: 46 / 46; 0.2.2, 0.2.1, 0.2.0: 47 / 47 → 0.7.0 | Checks that records are identical field by field, that `goals` is empty, that a rollback copy is taken before the migration, and that a window still running the old version (including 0.6.0) becomes read-only and writes nothing. |
 
-**Not run by me:** an independent reviewer agent (none was started); the final ZIP contents are re-checked after packing (see the delivery message).
+**Not run:** no independent reviewer agent was started. After packing, the unzipped package was re-checked (see the delivery message).
 
-**Mistakes found by these tests and fixed before release** (each has a regression test): review checkboxes not selecting; disabled danger button failing contrast; monthly «n-th» select overflowing 390 px; cut-off date shown without a year; undo guard not detecting an unchanged-timestamp edit; Cyrillic regex in code; backup asked twice in a row on cleanup (30-minute grace added).
+**Problems found while building and fixed before release:** step rows briefly had divider lines (now none, like task rows); the step sheet repeated «Шаг» as its title (it now shows the goal's name); search order between two goals was alphabetical (a goal matched by its name now comes before one matched only in its note). One pre-existing bug was also fixed: «Удалённые» showed technical keys for deleted repeating rules, waiting items and templates.
 
-**Known limits (also in DECISIONS B14 and SECURITY 4a):**
-- Repeating events are created ahead for **400 days**, never in the past; later occurrences appear as time passes.
-- After a confirmed cleanup, the app's older automatic daily/rollback copies on the same device still contain the removed records until they rotate out (5 days / latest 5). The external backup you saved is the full history.
-- Storage sizes in the cleanup screen are an **estimate**.
-- Cleanup never touches series occurrences, unfinished items, future events, Home/Buy, templates, or anything marked «Keep».
+**Known limits:**
+- Steps have no dates or reminders. This is on purpose (DECISIONS B15).
+- Links in notes are not checked or previewed; a tap opens them outside the app.
+- Everything listed for 0.6.0 still applies: repeating events are created 400 days ahead; older safety copies keep cleaned records until they rotate out; storage sizes are estimates.
 
 ## 2. Migration test report (release rule R11)
 
-**0.6.0 adds schema 5** (new optional fields only; automatic rollback copy on migration). The table below was written for 0.5.0 and the same checks were re-run for 0.6.0 (see section 1: 0.2.0 → 0.5.2 all passed). Older apps open schema 5 data read-only.
+**0.7.0 adds schema 6** (one new collection, `goals`; nothing in existing records changes; a rollback copy is taken automatically on migration). The table below was first written for 0.5.0, and the same checks were re-run for 0.7.0 from every earlier release, 0.2.0 → 0.6.0 (section 1: all passed). An older app, 0.6.0 included, opens schema 6 data read-only: without this, 0.6.0 would silently drop the goals when saving.
 
 
 **Supported earlier versions:** prototype (schema 1, key `arina-organizer-v1`), 0.2.0, 0.2.1, 0.2.2 (schema 2), 0.3.0 and 0.4.0 (schema 3 and 4; 0.5.0 keeps schema 4 — the same data, same keys).
@@ -67,6 +67,7 @@ Results are from the final code, in one run after the last code change:
 - Add to Home Screen, the installed-app look, offline use and the update flow **on iOS**; the iOS share sheet for backups (download fallback tested); whether iOS grants persistent storage.
 - Hosting on **GitHub Pages** (a local server stood in for it), including CDN delay after upload.
 - **Time-based features on a real clock:** evening overview and day changes were tested with a simulated clock.
+- **Goals on a real device:** the keyboard over the goal and step sheets, long press on a step, links in notes opening from the installed app.
 - **Cleanup on a real device:** share sheet for the backup and the real storage savings (only Chromium simulated).
 - **Very large organizers** (thousands of tasks) — performance not measured.
 
@@ -74,7 +75,7 @@ Results are from the final code, in one run after the last code change:
 
 A version is **not published** unless every line is ticked:
 - [ ] `tests.html` all green (ideally also in a second time zone).
-- [ ] `e2e-test.py` and `e2e-v5-test.py` and `e2e-v6-test.py` all passed.
+- [ ] `e2e-test.py`, `e2e-v5-test.py`, `e2e-v6-test.py` and `e2e-v7-test.py` all passed.
 - [ ] `privacy-test.py` all passed (two independent browser contexts).
 - [ ] `upgrade-test.py` all passed **from every supported earlier version** (keep a copy of each released ZIP for this).
 - [ ] Section 2 updated: migration report and remaining data-loss risks.
@@ -83,24 +84,28 @@ A version is **not published** unless every line is ticked:
 
 ## 5. On the iPhone (manual — NOT done by me)
 
-**Before updating to 0.6.0:** «Данные → Сохранить копию» and keep the file outside the app.
+**Before updating to 0.7.0:** «Копии и данные → Сохранить копию», and keep the file outside the app.
 
-**After updating (about 25 minutes).**
-- [ ] `https://…/tests.html` in Safari: «340 из 340 тестов пройдено».
-- [ ] «Доступна новая версия» → «Обновить». All tasks, events, lists still there. ⚙ → «Копии и данные» shows 0.6.0; a rollback copy «перед обновлением формата данных» exists.
-- [ ] Four tabs, ⚙ gear, ＋ button unchanged.
-- [ ] **Задачи:** «Без даты» on top with a small «＋»; tap it, type three lines, save: three tasks appear under «Без даты», the field closes. Below: «На этой неделе» by day (Mon–Sun; check on a Sunday and a Monday), then folded «Позже». No finished past tasks. Past unfinished are still in «Хвосты».
-- [ ] **Search (🔍 in the Задачи header):** type «ужин»; results update while typing, newest first, tasks and events labelled. Tap a dated result: Calendar opens on that day and the exact record is briefly highlighted. Tap an undated task: the editor opens. The keyboard stays up while typing.
-- [ ] **Calendar history:** open a past day; finished tasks and past events are there.
-- [ ] **Undo:** tick a task → small «Отменить» appears for a few seconds → tap: unticked. Same for move to another date and for deleting a task, an event and a list item. Make another change before tapping Undo: the old undo must not overwrite it.
-- [ ] **Recurring:** new rule with an end date; «2-й вторник месяца»; a repeating **event**; delete one occurrence (it stays skipped); old repeating tasks continue as before.
-- [ ] **Lists:** search inside an opened list; add several items with one per line; event «Подготовка»: unfinished above finished, untick restores the order.
-- [ ] **Cleanup (⚙ → cleanup):** open it; see totals and cut-off date; «Keep» on an old record protects it. «Сохранить копию» → file saved in Files. «Проверить» → select one record → remove. «Удалить все старые» → totals, cut-off, warning, tick the confirmation box, confirm; those records are gone from Calendar and Search; unfinished tasks, future events, Home/Buy and templates remain. The reminder card should not appear on the day you update; test "Remind me in a month" hides it.
-- [ ] Languages and themes: Русский/English, light/dark: nothing unreadable.
-- [ ] Airplane Mode: close and reopen: opens with your data.
-- [ ] Export a backup, check the file in Files, import it back (preview first).
+**After updating (about 20 minutes).**
+- [ ] `https://…/tests.html` in Safari shows «360 из 360 тестов пройдено».
+- [ ] «Доступна новая версия» → «Обновить». All tasks, events and lists are still there. ⚙ → «Копии и данные» shows 0.7.0 and a copy «перед обновлением формата данных».
+- [ ] **Five tabs** at the bottom: Сегодня, Календарь, Задачи, Списки, Цели. No label is cut off, and nothing hides behind the home indicator.
+- [ ] **Цели → ＋:** «Записать аудиокнигу», steps «Сделать тестовое задание» / «Записать пробную главу» on two lines → «Создать». The goal opens, the steps are in order, and the first one says «следующий шаг». The keyboard does not cover the fields.
+- [ ] Tick the first step: it stays in place, struck through. «Шаг сделан · Отменить» appears for a few seconds, and the next step becomes «следующий шаг».
+- [ ] «Добавить заметку»: write a few lines with a web address → «Сохранить». The address is a link; tapping it opens it outside the app, and coming back the app is unchanged.
+- [ ] Tap a step: rename it, ↑/↓, delete (it asks; Undo brings it back). A long press on a step opens the same sheet.
+- [ ] **Задачи:** below «На этой неделе» there is one folded line «Шаги к целям · N». Open it: one step per goal. Tick one: the next step of that goal appears; Undo works. Tapping the step's title opens the goal with that step highlighted.
+- [ ] **No pressure:** the next day, the steps are not in «Хвосты», «Сегодня» shows nothing about goals, and nothing is red or overdue.
+- [ ] «···» in a goal → «Поставить на паузу»: its step leaves «Задачи», and the goal shows «на паузе». «Снять с паузы» brings it back.
+- [ ] Tick all steps → «Цель достигнута»: the goal moves to «Достигнутые» (folded). «Вернуть в работу» works.
+- [ ] Delete a goal (it asks) → Undo. Delete again → ⚙ → «Копии и данные» → «Удалённые» shows «Цель: …» → «Восстановить».
+- [ ] 🔍 in Задачи or Цели: a word from a goal, its note or a step finds it; a tap opens the goal.
+- [ ] Русский/English and light/dark: nothing is unreadable.
+- [ ] Airplane Mode: close and reopen the app; «Цели» opens with your data.
+- [ ] Export a backup and import it back (preview first): the goals are in the preview counts.
+- [ ] The 0.6.0 items still apply (search, undo, recurrence, cleanup): repeat them quickly if 0.6.0 was never checked on the iPhone.
 
-**Quick check for every later version (about 2 minutes).** `tests.html` green; «Обновить» shows the new version; add, tick, delete a task; export a backup.
+**Quick check for every later version (about 2 minutes).** `tests.html` is green; «Обновить» shows the new version; add, tick and delete a task; open one goal; export a backup.
 
 ## 6. Running the automated tests yourself
 
@@ -109,6 +114,7 @@ A version is **not published** unless every line is ticked:
   - `python3 e2e-test.py <app_folder> <output_folder>`
   - `python3 e2e-v5-test.py <app_folder> <output_folder>` (several minutes; set `ONLY=<flow>` to run one flow)
   - `python3 e2e-v6-test.py <app_folder> <output_folder>`
+  - `python3 e2e-v7-test.py <app_folder> <output_folder>`
   - `python3 privacy-test.py <app_folder> <output_folder>`
   - `python3 upgrade-test.py <old_version_folder> <new_version_folder> <output_folder>` — run it once for each earlier released version.
   - Do not run two tests with the same output folder at once.
