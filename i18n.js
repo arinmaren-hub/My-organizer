@@ -18,6 +18,7 @@ import { RU5, EN5 } from './i18n-v5.js';
 import { RU6, EN6 } from './i18n-v6.js';
 import { RU7, EN7 } from './i18n-v7.js';
 import { RU8, EN8 } from './i18n-v8.js';
+import { RU9, EN9 } from './i18n-v9.js';
 
 export const LANGS = ['ru', 'en'];
 // Each language is named in its own language, as is usual.
@@ -706,6 +707,10 @@ Object.assign(EN, EN7);
 // 0.8.0: English is paused — the new Russian texts stand in for English ones (see i18n-v8.js).
 Object.assign(RU, RU8);
 Object.assign(EN, RU8, EN8);
+// 0.9.0: the same, but an English text that already exists is kept.
+Object.assign(RU, RU9);
+for (const [k, v] of Object.entries(RU9)) if (!(k in EN)) EN[k] = v;
+Object.assign(EN, EN9);
 
 export const DICTS = { ru: RU, en: EN };
 

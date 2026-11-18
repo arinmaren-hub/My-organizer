@@ -5,6 +5,7 @@
 import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, newGoal, PLAN_KINDS, SERIES_FREQS, SERIES_MODES, SERIES_MONTHLY_RULES } from './schema.js';
 import { isDateKey, isDateTime, isTime, weekKey, addDays, isoWeekday } from './dates.js';
 import { parseQuick } from './parsedate.js';
+import { findRepeat, untilKey } from './parserepeat.js';
 import { ensureOccurrences, afterCompletion, isOpen, isUntouchedEventOccurrence, eventTimes } from './recur.js';
 import { isBuiltinId, baseOf, builtinTemplate } from './templates.js';
 import { clone } from './util.js';
@@ -52,8 +53,10 @@ export function splitQuick(text, defaults, today) {
   const lines = String(text || '').split('\n').map(s => s.trim()).filter(Boolean);
   const specs = [];
   for (let i = 0; i < lines.length; i++) {
-    const p = parseQuick(lines[i], today);
-    const recognized = p.found.length > 0;
+    // 0.9.0: «каждый вторник и четверг до 21/12» — the repeat words are taken out first, the rest is read as before
+    const rp = findRepeat(lines[i]);
+    const p = parseQuick(rp ? rp.rest : lines[i], today);
+    const recognized = p.found.length > 0 || !!rp;
     let kind = p.kind, date = p.date;
     if (!kind) {
       // nothing recognised for the day: the form's choice applies
@@ -66,28 +69,52 @@ export function splitQuick(text, defaults, today) {
       }
     }
     const spec = { title: p.title, kind, date, time: p.time, deadline: p.deadline, raw: lines[i], recognized };
+    if (rp) { // a repeating rule starts on the line's own day, else on the form's day (today / tomorrow / the calendar date)
+      if (spec.kind !== 'day') { spec.kind = 'day'; spec.date = isDateKey(defaults.date) && defaults.kind === 'day' ? defaults.date : today; }
+      spec.deadline = null;
+      spec.repeat = { ...rp.rule, until: untilKey(rp.until, spec.date) };
+    }
     if (spec.time) return { specs, ask: spec, rest: lines.slice(i).join('\n') };
     specs.push(spec);
   }
   return { specs, ask: null, rest: '' };
 }
 
-// Adds ready tasks (from splitQuick) in one step.
+// A repeating rule from a fast-entry line (0.9.0), inside an update. Calendar rhythm: the task (or event) appears on each
+// of its days; nothing is made for days before the start.
+function pushRuleFromSpec(d, ctx, spec, kind) {
+  const r = spec.repeat;
+  const c = cleanSeries({ title: spec.title, freq: r.freq, interval: r.interval, days: r.days || [], until: r.until, mode: 'fixed',
+    startDate: spec.date, time: spec.time || null, kind: kind === 'event' ? 'event' : null }, ctx.today, kind === 'event' ? 'event' : 'task');
+  const s = newSeries({ id: ctx.uid(), title: c.title, freq: c.freq, interval: c.interval, mode: c.mode, startDate: c.startDate, time: c.time, now: ctx.now });
+  applySeriesFields(s, c);
+  d.series.push(s);
+  return s;
+}
+
+// Adds ready tasks (from splitQuick) in one step. A line with repeat words becomes a repeating rule instead.
 export function addTaskSpecs(store, specs) {
   if (!specs.length) return 0;
-  return store.update('act.addTasks', (d, { now, uid }) => {
+  return store.update('act.addTasks', (d, ctx) => {
+    const { now, uid } = ctx;
+    let rules = 0;
     for (const s of specs) {
+      if (s.repeat) { pushRuleFromSpec(d, ctx, s, 'task'); rules++; continue; }
       const task = newTask({ id: uid(), title: s.title, plan: { kind: s.kind, date: s.kind === 'none' ? null : s.date }, now });
       if (s.time && s.kind === 'day') task.time = s.time;
       if (s.deadline) task.deadline = s.deadline;
       d.tasks.push(task);
     }
+    if (rules) ensureOccurrences(d, ctx);
     return specs.length;
   });
 }
 
-// The same line as an event at its date and time.
+// The same line as an event at its date and time (with repeat words: a repeating event).
 export function addEventFromSpec(store, spec) {
+  if (spec.repeat) {
+    return store.update('act.addRepeat', (d, ctx) => { const s = pushRuleFromSpec(d, ctx, spec, 'event'); ensureOccurrences(d, ctx); return s.id; });
+  }
   return addEvent(store, { title: spec.title, start: `${spec.date}T${spec.time}` });
 }
 
@@ -587,6 +614,34 @@ export function repeatRecord(store, coll, id, f) {
     if (!isEvent && r.plan.kind !== 'day') { r.plan = { kind: 'day', date: startDate }; }
     ensureOccurrences(d, ctx);
     return s.id;
+  });
+}
+
+// «Удалить → Это и все следующие» (0.9.0) for a task or event that belongs to a live rule. This occurrence and every
+// later one are removed; earlier ones stay as history. Untouched events the rule made are removed for good (as a rule
+// change does); everything else (edited ones, the record the rule started from, open tasks) goes to «Удалённые» for
+// 30 days. If there is nothing earlier, the whole rule goes too; otherwise the rule ends the day before.
+// Returns { n, whole } (how many were removed; whether the rule itself was deleted).
+export function deleteRepeatFrom(store, coll, id) {
+  return store.update('act.deleteRepeat', (d, { now }) => {
+    const isEvent = coll === 'events';
+    const list = isEvent ? d.events : d.tasks;
+    const r = findAlive(list, id, isEvent ? 'what.event' : 'what.task');
+    const s = r.seriesId && d.series.find(x => x.id === r.seriesId && !x.deletedAt);
+    if (!s) throw appError('err.notRepeating');
+    const from = r.occurrenceDate || (isEvent ? r.start.slice(0, 10) : r.plan.date) || s.startDate;
+    const mine = list.filter(x => x.seriesId === s.id && !x.deletedAt);
+    const earlier = mine.some(x => x.occurrenceDate && x.occurrenceDate < from);
+    let n = 0;
+    for (const x of mine) {
+      if (!x.occurrenceDate || x.occurrenceDate < from) continue;
+      if (!isEvent && x.done) continue; // a finished task is history even if dated later
+      if (isEvent && isUntouchedEventOccurrence(x, s)) { list.splice(list.indexOf(x), 1); n++; continue; }
+      x.deletedAt = now; x.updatedAt = now; n++;
+    }
+    if (earlier) { const end = addDays(from, -1); if (!s.until || s.until > end) s.until = end; s.updatedAt = now; }
+    else { s.deletedAt = now; s.updatedAt = now; }
+    return { n, whole: !earlier };
   });
 }
 

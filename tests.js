@@ -20,6 +20,7 @@ import { registerV5 } from './tests-v5.js';
 import { registerV6 } from './tests-v6.js';
 import { registerV7 } from './tests-v7.js';
 import { registerV8 } from './tests-v8.js';
+import { registerV9 } from './tests-v9.js';
 
 setLang('ru'); // texts below are checked in Russian unless a test says otherwise
 
@@ -834,7 +835,7 @@ test(L, 'ошибки импорта — ключи на обоих языках
 });
 test(L, 'в коде нет русского текста интерфейса вне i18n.js (кроме boot.js)', async () => {
   const sw = await (await fetch('sw.js', { cache: 'no-store' })).text();
-  const files = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"')).filter(f => f.endsWith('.js') && !/i18n\.js|i18n-v4\.js|i18n-v5\.js|i18n-v6\.js|i18n-v7\.js|i18n-v8\.js|boot\.js/.test(f));
+  const files = JSON.parse(sw.match(/const ASSETS = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"')).filter(f => f.endsWith('.js') && !/i18n\.js|i18n-v4\.js|i18n-v5\.js|i18n-v6\.js|i18n-v7\.js|i18n-v8\.js|i18n-v9\.js|boot\.js/.test(f));
   const found = [];
   for (const f of files) {
     const code = (await (await fetch(f, { cache: 'no-store' })).text())
@@ -1541,6 +1542,7 @@ registerV5({ test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopi
 registerV6({ test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopies });
 registerV7({ test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopies });
 registerV8({ test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopies });
+registerV9({ test, eq, ok, setup, makeClock, savedDoc, rollbackCopies, dailyCopies });
 
 // ================= runner =================
 async function run() {

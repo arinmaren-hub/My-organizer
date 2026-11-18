@@ -523,10 +523,11 @@ function quickRun() {
   const r = A.splitQuick(ui.quick.text, quickDefaults(), ui.today);
   if (r.specs.length) {
     if (!A.addTaskSpecs(store, r.specs)) return; // failed: the text stays, the message is shown
-    const first = r.specs.find(x => x.recognized);
-    if (first) {
-      store.notify('info', r.specs.filter(x => x.recognized).length > 1 ? 'quick.addedMany' : 'quick.added',
-        { n: r.specs.filter(x => x.recognized).length, title: first.title, when: whenText(first) });
+    const plain = r.specs.filter(x => x.recognized && !x.repeat);
+    const rep = r.specs.find(x => x.repeat);
+    if (rep) repeatNotice(rep);
+    else if (plain.length) {
+      store.notify('info', plain.length > 1 ? 'quick.addedMany' : 'quick.added', { n: plain.length, title: plain[0].title, when: whenText(plain[0]) });
     }
   }
   ui.quick.text = r.rest;
@@ -536,15 +537,22 @@ function quickRun() {
   if (ui.sheet) focusSheetField();
 }
 
+// «Тренировка: каждую неделю: вт, чт, сб, до 21 дек» after a line with repeat words (0.9.0).
+function repeatNotice(spec) {
+  const r = spec.repeat;
+  store.notify('info', 'quick.repeatAdded', { title: spec.title, rule: ruleText({ freq: r.freq, interval: r.interval, days: r.days }),
+    until: r.until ? t('quick.repeatUntil', { day: { $day: r.until } }) : '' });
+}
+
 // The answer to the question about a line with a time; the rest of the text goes on.
 function quickAnswer(how) {
   const spec = ui.quick.ask;
   if (!spec) return;
   let done;
-  if (how === 'task') done = A.addTaskSpecs(store, [spec]);
+  if (how === 'task') { done = A.addTaskSpecs(store, [spec]); if (done && spec.repeat) repeatNotice(spec); }
   else if (how === 'event') {
     done = A.addEventFromSpec(store, spec);
-    if (done) store.notify('info', 'quick.eventAdded', { title: spec.title, when: whenText(spec) });
+    if (done) { if (spec.repeat) repeatNotice(spec); else store.notify('info', 'quick.eventAdded', { title: spec.title, when: whenText(spec) }); }
   } else {
     done = A.addTaskSpecs(store, [{ title: spec.raw, kind: 'day', date: quickDay() || ui.today, time: null, deadline: null }]);
   }
@@ -690,6 +698,12 @@ function withItemDeleteUndo(coll, listId, itemId, act) {
   return r;
 }
 
+// A task or event that belongs to a rule that still exists (0.9.0: «Удалить» then asks «только это / все следующие»).
+function inLiveRule(coll, id) {
+  const r = store.doc[coll].find(x => x.id === id && !x.deletedAt);
+  return !!(r && r.seriesId && store.doc.series.some(s => s.id === r.seriesId && !s.deletedAt));
+}
+
 // Goals (0.7.0): ticking or removing a step can be undone the same way.
 const stepById = (goalId, stepId) => { const g = store.doc.goals.find(x => x.id === goalId && !x.deletedAt); return g ? g.steps.find(x => x.id === stepId) || null : null; };
 function withStepUndo(goalId, stepId, key, act) {
@@ -817,10 +831,19 @@ const CLICK = {
 
   // tasks
   'task.move': el => shut(() => withTaskUndo(el.dataset.id, 'undo.moved', () => A.moveTask(store, el.dataset.id, el.dataset.kind))),
-  'task.delete': el => shut(() => confirmDelete() && withDeleteUndo('tasks', el.dataset.id, 'undo.taskDeleted', () => A.softDelete(store, 'tasks', el.dataset.id))),
+  'task.delete': el => (inLiveRule('tasks', el.dataset.id) ? openSheet({ type: 'delrepeat', coll: 'tasks', id: el.dataset.id })
+    : shut(() => confirmDelete() && withDeleteUndo('tasks', el.dataset.id, 'undo.taskDeleted', () => A.softDelete(store, 'tasks', el.dataset.id)))),
   'task.duplicate': el => shut(() => A.duplicateTask(store, el.dataset.id)),
   'task.toWaiting': el => shut(() => A.taskToWaiting(store, el.dataset.id)),
-  'event.delete': el => shut(() => confirmDelete() && withDeleteUndo('events', el.dataset.id, 'undo.eventDeleted', () => A.softDelete(store, 'events', el.dataset.id))),
+  'event.delete': el => (inLiveRule('events', el.dataset.id) ? openSheet({ type: 'delrepeat', coll: 'events', id: el.dataset.id })
+    : shut(() => confirmDelete() && withDeleteUndo('events', el.dataset.id, 'undo.eventDeleted', () => A.softDelete(store, 'events', el.dataset.id)))),
+  // 0.9.0: deleting a repeating task or event — the choice itself is the confirmation
+  'delrep.one': el => { const c = el.dataset.coll; shut(() => withDeleteUndo(c, el.dataset.id, c === 'events' ? 'undo.eventDeleted' : 'undo.taskDeleted', () => A.softDelete(store, c, el.dataset.id))); },
+  'delrep.following': el => shut(() => {
+    const r = A.deleteRepeatFrom(store, el.dataset.coll, el.dataset.id);
+    if (r) store.notify('info', r.whole ? 'delrep.doneAll' : 'delrep.done', { n: r.n });
+    return r;
+  }),
   'project.delete': el => confirmDelete() && A.softDelete(store, 'projects', el.dataset.id),
   'qty.step': el => A.stepQuantity(store, el.dataset.id, Number(el.dataset.delta)),
   restore: el => {

@@ -65,7 +65,9 @@ function quickSheet(doc, ctx, s) {
   let ask = '';
   if (q.ask) {
     const a = q.ask;
-    const when = `${formatDay(a.date)}${a.time ? ', ' + a.time : ''}`;
+    const when = a.repeat // 0.9.0: a line with repeat words — say the rule, not one date
+      ? `${ruleText({ freq: a.repeat.freq, interval: a.repeat.interval, days: a.repeat.days })}${a.repeat.until ? t('quick.repeatUntil', { day: { $day: a.repeat.until } }) : ''}, ${a.time}`
+      : `${formatDay(a.date)}${a.time ? ', ' + a.time : ''}`;
     ask = `<div class="banner info"><b>${esc(t('quick.askTitle', { title: a.title, when }))}</b><br>${esc(t('quick.askHint'))}
       <div class="moves"><button type="button" class="primary" data-action="quick.asTask">${esc(t('quick.asTask'))}</button>
         <button type="button" data-action="quick.asEvent">${esc(t('quick.asEvent'))}</button>
@@ -129,6 +131,24 @@ function repeatSheet(doc, ctx, s) {
     </form>`);
 }
 
+// «Удалить» on a task or event that belongs to a live rule (0.9.0): only this time, or this and all later ones.
+function delRepeatSheet(doc, ctx, s) {
+  const isEvent = s.coll === 'events';
+  const r = find(isEvent ? doc.events : doc.tasks, s.id);
+  const rule = r && r.seriesId && doc.series.find(x => x.id === r.seriesId && !x.deletedAt);
+  if (!rule) return '';
+  const from = r.occurrenceDate || (isEvent ? r.start.slice(0, 10) : r.plan.date);
+  const first = !(isEvent ? doc.events : doc.tasks).some(x => x.seriesId === rule.id && !x.deletedAt && x.occurrenceDate && x.occurrenceDate < from);
+  const a = `data-coll="${esc(s.coll)}" ${idAttr(r.id)}`;
+  return sheet(t(isEvent ? 'delrep.titleEvent' : 'delrep.titleTask'), `<p class="title">${esc(r.title)}</p>
+    <p class="muted small">${esc(formatDay(from))} · ${esc(ruleText(rule))}</p>
+    <div class="menu">
+      <button type="button" class="menuitem" data-action="delrep.one" ${a}><span class="grow">${esc(t('delrep.one'))}<br><span class="muted small">${esc(t('delrep.oneHint'))}</span></span></button>
+      <button type="button" class="menuitem danger" data-action="delrep.following" ${a}><span class="grow">${esc(t(first ? 'delrep.all' : 'delrep.following'))}<br><span class="muted small">${esc(t(first ? 'delrep.allHint' : 'delrep.followingHint'))}</span></span></button>
+    </div>
+    <div class="line"><button type="button" data-action="sheet.close">${esc(t('btn.cancel'))}</button></div>`);
+}
+
 function taskMenu(doc, ctx, s) {
   const task = find(doc.tasks, s.id);
   if (!task) return '';
@@ -146,7 +166,7 @@ function eventMenu(doc, ctx, s) {
   if (!e) return '';
   return sheet(e.title, menu([item('event.open', t('menu.open'), idAttr(e.id)), item('edit.open', t('btn.edit'), `data-kind="event" ${idAttr(e.id)}`),
     ...(e.seriesId ? [] : [item('repeat.open', t('repeat.btn'), `data-coll="events" ${idAttr(e.id)}`)]),
-    item('convert.open', t('menu.toTask'), `data-from="event" ${idAttr(e.id)}`), ...(e.seriesId ? [] : [keepItem('events', e)]), item('event.delete', t('btn.delete'), idAttr(e.id), 'danger')]));
+    ...(e.seriesId ? [] : [item('convert.open', t('menu.toTask'), `data-from="event" ${idAttr(e.id)}`), keepItem('events', e)]), item('event.delete', t('btn.delete'), idAttr(e.id), 'danger')]));
 }
 
 function waitMenu(doc, ctx, s) {
@@ -200,7 +220,7 @@ function editSheet(doc, ctx, s) {
   if (s.kind === 'task') {
     const task = find(doc.tasks, s.id);
     if (!task) return '';
-    body = editTaskForm(task) + seriesNote(doc, task) + `<div class="line"><button type="button" class="quiet" data-action="menu.task" ${idAttr(task.id)}>${esc(t('aria.more'))}</button>${repeatButton(doc, task, 'tasks')}${task.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button>`}</div>`;
+    body = editTaskForm(task) + seriesNote(doc, task) + `<div class="line"><button type="button" class="quiet" data-action="menu.task" ${idAttr(task.id)}>${esc(t('aria.more'))}</button>${repeatButton(doc, task, 'tasks')}${task.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button>`}<button type="button" class="quiet danger-text" data-action="task.delete" ${idAttr(task.id)}>${esc(t('btn.delete'))}</button></div>`;
   } else if (s.kind === 'event') {
     const e = find(doc.events, s.id);
     if (!e) return '';
@@ -259,7 +279,8 @@ function eventSheet(doc, ctx, s) {
   return sheet(e.title, `<p class="muted">${esc(when)}</p>${seriesNote(doc, e)}${prepBlock(e)}
     <div class="line"><button type="button" data-action="edit.open" data-kind="event" ${idAttr(e.id)}>${esc(t('btn.edit'))}</button>
       ${repeatButton(doc, e, 'events')}
-      <button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button></div>`);
+      ${e.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button>`}
+      <button type="button" class="quiet danger-text" data-action="event.delete" ${idAttr(e.id)}>${esc(t('btn.delete'))}</button></div>`);
 }
 
 function prepEditSheet(doc, ctx, s) {
@@ -291,7 +312,7 @@ function convertSheet(doc, ctx, s) {
           <button type="button" data-action="sheet.close">${esc(t('btn.cancel'))}</button></div></form>`);
   }
   const e = find(doc.events, s.id);
-  if (!e) return '';
+  if (!e || e.seriesId) return ''; // one time out of a repeating event does not become a task (0.9.0: no button for it)
   const losses = eventConversionLosses(e);
   return sheet(t('menu.toTask'), `<p class="title">${esc(e.title)}</p>
     <form data-form="convert.go" data-from="event" data-id="${esc(e.id)}" data-confirmed="${losses.length ? '1' : ''}" autocomplete="off">
@@ -453,7 +474,7 @@ function stepSheet(doc, ctx, s) {
 }
 
 const SHEETS = {
-  repeat: repeatSheet,
+  repeat: repeatSheet, delrepeat: delRepeatSheet,
   newgoal: newGoalSheet, addsteps: addStepsSheet, goalnote: goalNoteSheet, goalrename: goalRenameSheet, goalmenu: goalMenu, stepedit: stepSheet,
   appmenu: appMenu, quick: quickSheet, taskmenu: taskMenu, eventmenu: eventMenu, waitmenu: waitMenu, seriesmenu: seriesMenu,
   move: moveSheet, pick: pickSheet, edit: editSheet, event: eventSheet, prepedit: prepEditSheet, convert: convertSheet,

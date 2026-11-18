@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0 — 2026-11-18 — repeat in words, delete all at once
+
+Built on 0.8.1. Same address, same storage keys, **same data format (schema 7)**: nothing is converted.
+
+**What changed for you**
+- **Repeat in words.** In «Новые дела», write for example «Тренировка в зале каждый вторник, четверг и субботу до 21/12». It becomes a repeating task that appears on each of those days until 21 December; the Calendar shows the coming ones in advance. Also «по будням», «по выходным», «каждые 3 дня», «каждый месяц», «раз в неделю», «до 21 декабря». With a time («… в 20:44») the app asks «задача или событие?».
+- **Delete all times at once.** «Удалить» on a repeating task or event asks «Только это» or «Это и все следующие» («Весь повтор» on the first time). Past times stay in the history.
+- **«Удалить» is right in the event card and in the task editor**, no need to go through «Изменить».
+- **Fixed:** repeating events offered «Сделать задачей», which then failed. The button is gone for them.
+
+**Known limits:** nothing was tested on a real iPhone/Safari; see `TESTING.md`.
+
 ## 0.8.1 — 2026-11-18 — no more «↻»
 
 Built on 0.8.0. Same address, same storage keys, **same data format (schema 7)** — nothing is converted.

@@ -371,6 +371,22 @@ Built on 0.7.0. Same address, same storage keys, same installed app.
 
 **0.8.1 (owner, 2026-11-18): no «↻» anywhere.** The owner did not like the circular-arrow mark on repeating items. It is removed from every row, list, search result, card and text; repeating records look like any others. That a record repeats is shown only in its card («Повторяется: …», «Изменить повтор»). No data change.
 
+## B17. What 0.9.0 built (owner's requests of 2026-11-18, evening) — decisions
+
+Built on 0.8.1. Same address, same storage keys, **same data format (schema 7)**: nothing is converted, and a 0.8.x window keeps working on 0.9.0 data.
+
+**Repeat in words in «Новые дела»** (`parserepeat.js`, words in `i18n-v9.js`; Russian only). A line such as «Тренировка в зале каждый вторник, четверг и субботу до 21/12» becomes a repeating rule. The words are taken out of the title. The rest of the line is read as before (a time, «завтра», «в понедельник»…).
+- A repeat needs a repeat word: «каждый/каждую/каждое/каждые», «повтор…», «ежедневно/еженедельно/ежемесячно/ежегодно», «по» + weekdays in the plural («по вторникам»), «по будням» (пн–пт), «по выходным» (сб, вс), «раз в неделю/месяц». A weekday on its own («в пятницу») stays a one-time date.
+- Understood: several weekdays (any form, «вт/чт» too), «каждые N дней/недель/месяцев», «каждый день/неделю/месяц/год». The end is «до / по / окончание / заканчивается / конец» + 21/12, 21.12, 21.12.2026 or 21 декабря [2026]. Without a year, the nearest such date on or after the start is used. Words that are not understood simply stay in the title.
+- The rule starts on the line's own day, or else on the form's day («Сегодня», «Завтра» or the calendar date). It uses the calendar rhythm: the task appears on each of its days, nothing is made for days before the start, and the Calendar shows the coming ones in advance. A line with a time asks «задача или событие?», naming the rule; «Событие» makes a repeating event. A message names what was understood, for example «"Тренировка в зале": каждую неделю: вт, чт, сб, до пн, 21 дек».
+- Without repeat words a line is read exactly as before. «Позвонить до 21/12» is still a deadline.
+
+**Deleting a repeating task or event.** «Удалить» (now also directly in the event card and in the task editor, not only via «Изменить» or the menu) asks «Только это» or «Это и все следующие». On the first time the second choice reads «Весь повтор». The choice itself is the confirmation.
+- «Только это» works as before: the date is skipped, and Undo is offered for 7 s.
+- «Это и все следующие» removes this time and every later one. Untouched events made by the rule go for good; edited ones, the record the rule started from, and open tasks go to «Удалённые» for 30 days. Earlier times stay as history and the rule ends the day before. If there is nothing earlier, the rule itself is deleted (restorable from «Удалённые»).
+
+**Bug fixed: «Сделать задачей» on a repeating event.** The button was shown, but one time out of a rule cannot become a task (B14), so it failed with «повторяющуюся задачу нельзя преобразовать». The button is no longer shown on repeating events, in the card or in the menu. The message, if ever seen, now says what to do instead: delete the repeat and write it again (as a task with repeat words).
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure

@@ -1,6 +1,6 @@
 # ROADMAP.md — release order
 
-Updated 2026-11-18. **Current version: 0.8.1** (0.8.0 without the «↻» mark; built on 0.7.0; waiting for the owner's review and manual iPhone testing; **not deployed**). English is paused; notifications were declined (B16).
+Updated 2026-11-18. **Current version: 0.9.0** (repeat in words, «Удалить → это и все следующие»; built on 0.8.1; waiting for the owner's review and manual iPhone testing; **not deployed**). English is paused; notifications were declined (B16).
 Designs are in `DECISIONS.md` (sections B–B9). Release rules for data (R1–R12) are in `DECISIONS.md` section F; privacy rules (P1–P8) in section G and `SECURITY.md`.
 Each release is small, changes the data format at most once, keeps all existing data, and must be approved before work starts and reviewed before the next one begins. **The next release does not start until 0.5.0 is reviewed.**
 

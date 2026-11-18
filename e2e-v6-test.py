@@ -459,6 +459,8 @@ with sync_playwright() as p:
         pg.click('.cal-grid button[data-date="2026-11-10"]')
         check(L + 'Календарь: повтор события виден на своей дате', 'Кружок' in pg.inner_text('#day-panel'))
         s.more('Кружок'); s.item(S['del'])
+        # 0.9.0: deleting a repeating event asks «Только это / Это и все следующие» (Russian only; English is paused)
+        s.wait_sheet(); pg.click('#sheet-root [data-action="delrep.one"]'); pg.wait_for_timeout(80)
         ser = s.doc()['series'][0]
         check(L + 'Удалённое повторение: дата в списке пропусков, серия цела', ser.get('skip') == ['2026-11-10'] and len(s.events('Кружок')) == 3)
         s.reload()

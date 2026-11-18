@@ -311,6 +311,8 @@ with sync_playwright() as p:
     @step('Откат к данным до обновления')
     def _():
         q = people['A']['page']
+        # A has the evening overview on at 21:00: run after 21:00 local time, the app opens «Вечер» by itself — start from «Сегодня»
+        q.click('nav#nav button >> nth=0'); q.wait_for_timeout(100)
         q.click('#fab'); q.wait_for_selector('#sheet-root textarea'); q.wait_for_timeout(260)
         q.fill('#sheet-root textarea', 'после обновления')
         q.click('#sheet-root form button[type=submit]'); q.wait_for_timeout(100)
