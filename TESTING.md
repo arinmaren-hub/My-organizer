@@ -1,6 +1,8 @@
-# TESTING.md — version 0.8.0
+# TESTING.md — version 0.8.1
 
 ## 1. What was actually tested (2026-11-18, by Claude)
+
+**0.8.1** = 0.8.0 without the «↻» mark (no data change). The whole gate below was run again on 0.8.1; the numbers are from that run.
 
 **Environment:** headless **Chromium 153** driven by **Playwright 1.63** on Linux. The screen was iPhone-sized (390 × 844, touch), plus 320 px for narrow checks, served from a local http server with a simulated clock (Friday 9 October 2026). **Only Chromium was used: no WebKit, no Safari, no real iPhone or iPad.** Long press, the keyboard and safe areas were simulated, not tried on a device.
 
@@ -9,13 +11,13 @@ All results come from one run on the final code, after the last code change:
 | Test set | Result | Notes |
 |---|---|---|
 | `tests.html` unit tests | **377 / 377** in each of five time zones | UTC, America/Los_Angeles, Pacific/Kiritimati (UTC+14), Pacific/Auckland, Europe/Athens. 17 new tests for 0.8.0 cover: the upgrade from 0.7.0 (schema 6 → 7); checking weekday lists and the «origin» flag; dates for several weekdays (every week, every 2 weeks, a start mid-week, an end date, across New Year); repeating events on Mon and Thu; weekdays turning a «from completion» rule into a calendar one; changing weekdays keeping hand-edited events; «Повторять» on an event (no duplicate, time, end and preparation kept, cannot be repeated twice, own weekday always included); deleting, restoring or changing the rule never removing the original event or task; «Повторять» on an undated task and on an old one (no backfill); «Завтра» with dates written in the line winning; English fallback for the new texts. |
-| `e2e-v8-test.py`, new 0.8.0 click-through (**Russian only**) | **111 / 111** | Real browser. «Сегодня / Завтра»: default, switching keeps the text and focus, lines go to tomorrow, a written date wins, a line with a time asks on tomorrow's date, it starts on «Сегодня» again, it is shown from the Calendar only for today. «Повторять» on an event: the choices, the locked own weekday, ticking a weekday choosing «По дням недели», the card afterwards («↻ Повторяется», «Изменить повтор»), no duplicate, Thursdays and Mondays created, the rule editor's chips and showing/hiding by frequency, persistence after reload. «Повторять» on a task: from the editor and from the long-press menu; deleting the rule keeping the task. A new rule from «Задачи» on Tue and Fri. Contrast and overflow on 7 screens × light/dark × 390/320 px. Offline. |
+| `e2e-v8-test.py`, new 0.8.0 click-through (**Russian only**) | **139 / 139** | Real browser. «Сегодня / Завтра»: default, switching keeps the text and focus, lines go to tomorrow, a written date wins, a line with a time asks on tomorrow's date, it starts on «Сегодня» again, it is shown from the Calendar only for today. «Повторять» on an event: the choices, the locked own weekday, ticking a weekday choosing «По дням недели», the card afterwards («Повторяется: …», «Изменить повтор»), no duplicate, Thursdays and Mondays created, the rule editor's chips and showing/hiding by frequency, persistence after reload. «Повторять» on a task: from the editor and from the long-press menu; deleting the rule keeping the task. A new rule from «Задачи» on Tue and Fri. Contrast and overflow on 7 screens × light/dark × 390/320 px, and on each of them no «↻» anywhere (0.8.1). Offline. |
 | `e2e-v7-test.py`, 0.7.0 click-through | **276 / 276** | Only the schema number and the newer-data version changed. |
 | `e2e-v6-test.py`, 0.6.0 click-through | **350 / 350** | Schema 7. |
 | `e2e-v5-test.py`, 0.5.x click-through | **725 / 725** | Schema 7. |
 | `e2e-test.py`, legacy scenario | **125 / 125** | Backup schema 7. |
 | `privacy-test.py` | **38 / 38** | The server saw only `GET` requests for the app's own files. |
-| `upgrade-test.py`: real service-worker update, two people side by side | **0.7.0: 47 / 47**; 0.6.0: 47 / 47; 0.5.2: 47 / 47; 0.5.0: 47 / 47; 0.4.0: 46 / 46; 0.3.0: 46 / 46; 0.2.2, 0.2.1, 0.2.0: 47 / 47 → 0.8.0 | Records identical field by field; a rollback copy before the migration; a window still running an older version (0.7.0 included) becomes read-only and writes nothing. |
+| `upgrade-test.py`: real service-worker update, two people side by side | **0.8.0: 45 / 45** (same data format); 0.7.0: 47 / 47; 0.6.0: 47 / 47; 0.5.2: 47 / 47; 0.5.0: 47 / 47; 0.4.0: 46 / 46; 0.3.0: 46 / 46; 0.2.2, 0.2.1, 0.2.0: 47 / 47 → 0.8.1 | Records identical field by field. From 0.8.0: no conversion, no copy «before migration», and an open 0.8.0 window keeps working without wiping anything. From older versions: a rollback copy before the migration, and a window still running the old version becomes read-only and writes nothing. The test now works out from `schema.js` whether the data format changed. |
 
 **English:** paused by the owner. New screens were tested in Russian only. The older suites still run their English checks, which passed.
 
@@ -93,20 +95,21 @@ A version is **not published** unless every line is ticked:
 
 ## 5. On the iPhone (manual — NOT done by me)
 
-**Before updating to 0.8.0:** «Копии и данные → Сохранить копию», and keep the file outside the app.
+**Before updating to 0.8.1:** «Копии и данные → Сохранить копию», and keep the file outside the app.
 
 **After updating (about 15 minutes).**
 - [ ] `https://…/tests.html` in Safari shows «377 из 377 тестов пройдено».
-- [ ] «Доступна новая версия» → «Обновить». Everything is still there. ⚙ → «Копии и данные» shows 0.8.0 and a copy «перед обновлением формата данных».
+- [ ] «Доступна новая версия» → «Обновить». Everything is still there. ⚙ → «Копии и данные» shows 0.8.1. Coming from 0.7.0 or older, there is also a copy «перед обновлением формата данных»; coming from 0.8.0, nothing is converted.
 - [ ] **«Новые дела» in the evening:** «＋» → under the field are «Сегодня | Завтра» (with «Сегодня» chosen) and «На …». Type two lines, tap «Завтра»: the text stays, the keyboard stays up, and «На …» shows tomorrow. «Добавить» puts both on tomorrow. Open «＋» again: it is back on «Сегодня».
 - [ ] With «Завтра» chosen, a line «… в пятницу» still goes to Friday.
 - [ ] After midnight but before your «день заканчивается в» time, «Завтра» is the calendar today (your day has not ended yet).
-- [ ] **Иконопись:** Календарь → the lesson's day → the lesson → **«Повторять»** → «Каждую неделю, по понедельникам» → «Повторять». The card shows «↻ Повторяется: каждую неделю». The next Mondays have the lesson, and there is still only one lesson on the first day. Its «Подготовка» is untouched.
+- [ ] **Иконопись:** Календарь → the lesson's day → the lesson → **«Повторять»** → «Каждую неделю, по понедельникам» → «Повторять». The card shows «Повторяется: каждую неделю», without any «↻». The next Mondays have the lesson, and there is still only one lesson on the first day. Its «Подготовка» is untouched.
 - [ ] «Повторять» → «По дням недели»: the event's own day is ticked and cannot be unticked; tick another day → «Повторять». Both weekdays get the event.
 - [ ] «Изменить повтор»: the rule editor shows the weekday chips. Change to «Каждые 2 недели» → «Сохранить».
 - [ ] A task: tap it → «Повторять» → «Каждый день». Tomorrow a new one appears, and there is no copy today.
 - [ ] Long press on a task or event: «Повторять» is in the menu.
 - [ ] Задачи → «Повторяющиеся задачи» → «···» on that rule → «Удалить»: the original task or event stays, as an ordinary one.
+- [ ] No «↻» anywhere: Сегодня, Календарь, Задачи → «Повторяющиеся задачи», search results.
 - [ ] Light/dark: the switch, the chips and the radio buttons are readable.
 - [ ] Airplane Mode: close and reopen the app; «＋» still shows «Сегодня | Завтра».
 - [ ] The 0.7.0 items (goals) and 0.6.0 items still apply: repeat them quickly if those versions were never checked on the iPhone.

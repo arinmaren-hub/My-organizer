@@ -31,7 +31,7 @@ export function searchResultsHtml(doc, s) {
     const when = r.date ? `${r.planKind === 'week' ? t('plan.week', { day: { $day: r.date } }) : formatDay(r.date)}${r.time ? ', ' + r.time : ''}` : t('plan.none');
     const typeLabel = t(r.type === 'event' ? 'search.event' : 'search.task');
     return `<button type="button" class="srch ${r.type}${r.done ? ' is-done' : ''}" data-action="search.go" data-type="${r.type}" data-id="${esc(r.id)}">
-      <span class="stitle">${r.recurring ? '↻ ' : ''}${esc(r.title)}</span>
+      <span class="stitle">${esc(r.title)}</span>
       <span class="meta">${esc(typeLabel)} · ${esc(when)}${r.done ? ` · ${esc(t('search.done'))}` : ''}</span></button>`;
   }).join('');
   return `<div class="srch-list">${rows}</div>${found.length >= MAX_RESULTS ? `<p class="muted small">${esc(t('search.limit', { n: MAX_RESULTS }))}</p>` : ''}`;

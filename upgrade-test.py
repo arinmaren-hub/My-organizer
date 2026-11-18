@@ -24,7 +24,10 @@ shutil.rmtree(SITE, ignore_errors=True)
 shutil.copytree(OLD, SITE)
 ver = lambda d: re.search(r"APP_VERSION = '([^']+)'", open(os.path.join(d, 'version.js'), encoding='utf-8').read()).group(1)
 OLD_V, NEW_V = ver(OLD), ver(NEW)
-SAME = False   # 0.6.0 moved the data format 4 → 5 and 0.7.0 moved it 5 → 6 (goals) and 0.8.0 moves it 6 → 7 (weekdays, «Повторять»): every older version is a migration (copy «before migration», old windows become read-only)
+# Same data format (schema) in both versions → no migration: no copy «before migration», the old window keeps working.
+# Different (0.6.0: 4 → 5, 0.7.0: → 6, 0.8.0: → 7) → migration with a rollback copy, old windows become read-only.
+schema = lambda d: int(re.search(r"SCHEMA_VERSION = (\d+)", open(os.path.join(d, 'schema.js'), encoding='utf-8').read()).group(1))
+SAME = schema(OLD) == schema(NEW)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -263,10 +266,16 @@ with sync_playwright() as p:
         w = people['A']['old_window']
         disk = w.evaluate("localStorage.getItem('organizer:data')")
         w.evaluate("window.dispatchEvent(new StorageEvent('storage', { key: 'organizer:data' }))")
-        if OLD_V >= '0.5':
+        if OLD_V >= '0.5' and not SAME:
             # the old window noticed the newer data and went read-only: its «＋» is gone, so nothing can be typed in
             w.wait_for_timeout(300)
             check('Старое окно: кнопка «＋» скрыта (только чтение)', not w.locator('#fab').is_visible())
+        elif OLD_V >= '0.5':
+            # same data format: the old window keeps working; what it writes must not wipe anything
+            w.wait_for_timeout(300)
+            w.click('#fab'); w.wait_for_selector('#sheet-root textarea'); w.wait_for_timeout(260)
+            w.fill('#sheet-root form[data-form="task.quickAdd"] textarea', 'из старого окна')
+            w.click('#sheet-root form[data-form="task.quickAdd"] button[type=submit]'); w.wait_for_timeout(150)
         else:
             w.fill('form[data-form="task.quickAdd"] textarea', 'из старого окна')
             w.click('form[data-form="task.quickAdd"] button[type=submit]')

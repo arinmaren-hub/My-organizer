@@ -91,7 +91,7 @@ const keepItem = (coll, r) => item('keep.toggle', t(r.keep ? 'cleanup.unkeep' : 
 
 // ---------- «Повторять» (0.8.0) ----------
 
-// «↻ Повторяется: каждую неделю» under a task or event that belongs to a rule.
+// «Повторяется: каждую неделю» under a task or event that belongs to a rule.
 function seriesNote(doc, r) {
   const s = r.seriesId && doc.series.find(x => x.id === r.seriesId && !x.deletedAt);
   return s ? `<p class="muted small">${esc(t('repeat.repeats', { rule: ruleText(s) }))}</p>` : '';

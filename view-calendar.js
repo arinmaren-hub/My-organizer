@@ -77,7 +77,7 @@ function dayPanel(doc, cal, ctx) {
   const main = c.events.map(e => eventRow(e, e.start.slice(11))).join('') + c.tasks.map(x => taskRow(x)).join('');
   let body = main ? `<div class="list">${main}</div>` : '';
   if (c.deadlines.length) body += `<h3 class="sub">${esc(t('cal.deadlines'))}</h3>${c.deadlines.map(x => taskRow(x, { swipe: false })).join('')}`;
-  if (c.repeats.length) body += `<h3 class="sub">${esc(t('cal.repeats'))}</h3>${c.repeats.map(r => `<div class="row"><div class="grow">↻ ${esc(r.title)}</div></div>`).join('')}`;
+  if (c.repeats.length) body += `<h3 class="sub">${esc(t('cal.repeats'))}</h3>${c.repeats.map(r => `<div class="row"><div class="grow">${esc(r.title)}</div></div>`).join('')}`;
   if (!body) body = empty(t('cal.noItems'));
   const week = c.weekTasks.length ? foldBlock('calweek', t('cal.weekTasks', { n: c.weekTasks.length }), c.weekTasks.map(x => taskRow(x)).join('')) : '';
   return `<section id="day-panel">

@@ -263,7 +263,7 @@ with sync_playwright() as p:
         pg.locator('#sheet-root .wday', has_text='Чт').click(); pg.wait_for_timeout(30)
         check(L + 'Отметка дня выбирает «По дням недели»', pg.locator('#sheet-root input[name=preset][value=days]').is_checked())
         pg.click('#sheet-root form[data-form="repeat.save"] button[type=submit]'); pg.wait_for_timeout(100)
-        check(L + 'После сохранения снова карточка события с правилом', pg.locator('#sheet-root .sheet-head', has_text='Иконопись урок').count() == 1 and '↻ Повторяется: каждую неделю: пн, чт' in pg.inner_text('#sheet-root .sheet'))
+        check(L + 'После сохранения снова карточка события с правилом', pg.locator('#sheet-root .sheet-head', has_text='Иконопись урок').count() == 1 and 'Повторяется: каждую неделю: пн, чт' in pg.inner_text('#sheet-root .sheet'))
         check(L + 'Вместо «Повторять» — «Изменить повтор»', pg.locator('#sheet-root [data-action="repeat.open"]').count() == 0 and pg.locator('#sheet-root [data-action="edit.open"][data-kind="series"]').count() == 1)
         d = s.doc()
         mine = [e for e in d['events'] if not e['deletedAt'] and e['title'] == 'Иконопись урок']
@@ -319,7 +319,7 @@ with sync_playwright() as p:
         check(L + 'Удаление правила оставляет саму задачу обычной', not w1['deletedAt'] and w1['seriesId'] is None and 'seriesOrigin' not in w1)
         check(L + '«Йога» по-прежнему в задачах', 'Йога' in s.text())
         s.open_title('Полить цветы')
-        check(L + 'В задаче с правилом — «↻ Повторяется» и «Изменить повтор»', '↻ Повторяется: каждый день' in pg.inner_text('#sheet-root .sheet') and pg.locator('#sheet-root [data-action="edit.open"][data-kind="series"]').count() == 1)
+        check(L + 'В задаче с правилом — «Повторяется» и «Изменить повтор»', 'Повторяется: каждый день' in pg.inner_text('#sheet-root .sheet') and pg.locator('#sheet-root [data-action="edit.open"][data-kind="series"]').count() == 1)
         s.close_sheet()
         check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
         s.close()
@@ -364,6 +364,7 @@ with sync_playwright() as p:
             s = Session('ru', theme=theme, data=d8(events=[ev('e1', 'Иконопись урок', '2026-10-12T18:00', '2026-10-12T20:00')], tasks=[task('n1', 'Полить цветы')])); pg = s.pg
             if W != 390: pg.set_viewport_size({'width': W, 'height': 640}); pg.wait_for_timeout(150)
             def look(name):
+                check(L + f'Нет значка ↻ (0.8.1): {name}', '↻' not in pg.inner_text('body'))
                 bad = pg.evaluate(CONTRAST_JS)
                 check(L + f'Контраст ≥ 4.5:1: {name}', not bad, '; '.join(bad[:4]))
                 ov = pg.evaluate(OVERFLOW_JS)

@@ -21,7 +21,7 @@ export function renderUnconfirmed(doc, today) {
     ${list.map(task => {
       const id = esc(task.id);
       const b = (how, key) => `<button type="button" data-action="occ.confirm" data-id="${id}" data-how="${how}">${esc(t(key))}</button>`;
-      return `<div class="row"><div class="grow"><div class="title">↻ ${esc(task.title)}</div>
+      return `<div class="row"><div class="grow"><div class="title">${esc(task.title)}</div>
         <div class="meta">${esc(t('unconf.planned', { day: { $day: task.plan.date } }))}</div>
         <div class="moves">${b('done', 'unconf.done')}${b('doneThen', 'unconf.doneThen')}${b('skip', 'unconf.skip')}${b('today', 'unconf.today')}</div></div></div>`;
     }).join('')}</section>`;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1 — 2026-11-18 — no more «↻»
+
+Built on 0.8.0. Same address, same storage keys, **same data format (schema 7)** — nothing is converted.
+
+- The circular arrow «↻» is gone everywhere: in front of repeating events and rule names, in task rows, in search results, in the Calendar's and the evening's «Повторы», in the «Повторы ждут ответа» card and in «Повторяется: …» (owner's request). A repeating task or event now looks like any other; «Повторяется: …» in its card and «Изменить повтор» still say that it repeats.
+
 ## 0.8.0 — 2026-11-18 — «Завтра» and «Повторять»
 
 Built on 0.7.0. **Same address, same storage keys, same installed app.** The data format moves from schema 6 to **7** (two optional fields); your data is converted automatically after a full copy is kept. Older versions show newer data read-only.

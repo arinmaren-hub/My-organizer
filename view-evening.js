@@ -24,7 +24,7 @@ export function renderEvening(doc, ctx) {
   let tomorrowHtml = '';
   if (s.events.length) tomorrowHtml += section('evening.events', s.events.map(e => eventRow(e, e.start.slice(11))).join(''));
   if (s.tasks.length) tomorrowHtml += section('evening.tasks', s.tasks.map(x => taskRow(x)).join(''));
-  if (s.repeats.length) tomorrowHtml += section('evening.repeats', s.repeats.map(r => `<div class="row"><div class="grow">↻ ${esc(r.title)}</div></div>`).join(''));
+  if (s.repeats.length) tomorrowHtml += section('evening.repeats', s.repeats.map(r => `<div class="row"><div class="grow">${esc(r.title)}</div></div>`).join(''));
   if (s.weekTasks.length) tomorrowHtml += section('evening.week', s.weekTasks.map(x => taskRow(x)).join(''));
   if (s.deadlines.length) tomorrowHtml += section('evening.deadlines', s.deadlines.map(x => taskRow(x)).join(''));
   if (s.waiting.length) tomorrowHtml += section('evening.waiting', s.waiting.map(w => `<div class="row"><div class="grow">${esc(w.title)}${w.from ? ` · ${esc(w.from)}` : ''}</div></div>`).join(''));

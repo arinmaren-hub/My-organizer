@@ -369,6 +369,8 @@ Built on 0.7.0. Same address, same storage keys, same installed app.
 
 **Also:** the rule editor now shows «Конец» (events) and «Закончить после» on separate lines (they overlapped at phone width).
 
+**0.8.1 (owner, 2026-11-18): no «↻» anywhere.** The owner did not like the circular-arrow mark on repeating items. It is removed from every row, list, search result, card and text; repeating records look like any others. That a record repeats is shown only in its card («Повторяется: …», «Изменить повтор»). No data change.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure

@@ -472,7 +472,7 @@ with sync_playwright() as p:
         check(L + 'Повтор по расписанию: серия создана, повторы 25.09, 02.10, 09.10', len(ser) == 1 and sorted(t['occurrenceDate'] for t in occ) == ['2026-09-25', '2026-10-02', '2026-10-09'], str(sorted(t['occurrenceDate'] for t in occ)))
         check(L + 'Повторы не отмечены сделанными или пропущенными сами', all(not t['done'] and not t['skipped'] for t in occ))
         s.tab('today')
-        card = pg.locator('main > section.card.review', has_text='↻')
+        card = pg.locator('main > section.card.review', has=pg.locator('[data-action="occ.confirm"]'))
         check(L + 'Сегодня: карточка «Повторы без подтверждения» (2 шт.), обычного «Утреннего разбора» нет', card.locator('.row').count() == 2 and 'Зал' in card.inner_text())
         card.locator('.row').first.locator('[data-how="doneThen"]').click()
         t0 = [t for t in s.doc()['tasks'] if t['occurrenceDate'] == '2026-09-25'][0]
@@ -480,7 +480,7 @@ with sync_playwright() as p:
         pg.locator('main > section.card.review .row').first.locator('[data-how="skip"]').click()
         t1 = [t for t in s.doc()['tasks'] if t['occurrenceDate'] == '2026-10-02'][0]
         check(L + '«Пропустить»: помечено только по вашему нажатию, запись сохранена', t1['skipped'] and not t1['done'])
-        check(L + 'Карточка подтверждения исчезла, сегодняшний повтор остался задачей', pg.locator('main > section.card.review', has_text='↻').count() == 0 and 'Зал' in pg.inner_text('main'))
+        check(L + 'Карточка подтверждения исчезла, сегодняшний повтор остался задачей', pg.locator('main > section.card.review', has=pg.locator('[data-action="occ.confirm"]')).count() == 0 and 'Зал' in pg.inner_text('main'))
         # closed for 3 weeks: more repeats appear, still unconfirmed
         s.at('2026-10-30T09:00:00+03:00')
         occ = sorted(t['occurrenceDate'] for t in s.doc()['tasks'] if t['seriesId'] and not t['done'] and not t['skipped'])

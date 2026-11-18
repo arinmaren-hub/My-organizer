@@ -70,7 +70,7 @@ function seriesRow(doc, s, todayKey) {
   if (s.paused) meta.push(t('recur.paused'));
   else if (now) meta.push(t('recur.next', { day: { $day: now } }));
   return `<div class="row srow" data-id="${esc(s.id)}">
-      <div class="grow ttext" data-action="edit.open" data-kind="series" data-id="${esc(s.id)}" role="button" tabindex="0"><div class="title">↻ ${esc(s.title)}</div><div class="meta">${esc(meta.join(' · '))}</div></div>
+      <div class="grow ttext" data-action="edit.open" data-kind="series" data-id="${esc(s.id)}" role="button" tabindex="0"><div class="title">${esc(s.title)}</div><div class="meta">${esc(meta.join(' · '))}</div></div>
       ${moreButton('menu.series', s.id)}</div>`;
 }
 
