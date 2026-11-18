@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0 — 2026-11-18 — «Завтра» and «Повторять»
+
+Built on 0.7.0. **Same address, same storage keys, same installed app.** The data format moves from schema 6 to **7** (two optional fields); your data is converted automatically after a full copy is kept. Older versions show newer data read-only.
+
+**What changed for you**
+- **«Новые дела»: «Сегодня / Завтра».** Under the text box. Choose «Завтра» and every line without its own date goes to tomorrow — handy for writing tomorrow's list in the evening. It starts on «Сегодня» each time. A date written in a line still wins.
+- **«Повторять»** in an event's card, in a task's editor and in the long-press menus: every day, every week, **on chosen weekdays** (e.g. пн и чт), every 2 weeks, every month, every year, with an optional end date. The event or task itself becomes the first one — no duplicate, its preparation list stays. Afterwards the card shows «↻ Повторяется: …» and «Изменить повтор».
+- **Several weekdays in one rule** — also in «Задачи → Повторяющиеся задачи → ＋».
+- Deleting a rule keeps the task or event it started from.
+- The rule editor's «Конец» and «Закончить после» no longer overlap on a phone.
+
+**Language:** English is paused; new texts appear in Russian even in English mode.
+
+**Not done (owner's decision):** notifications.
+
+**Known limits:** nothing was tested on a real iPhone/Safari; see `TESTING.md`.
+
 ## 0.7.0 — 2026-11-15 — «Цели»: goals with steps, without pressure
 
 Built on 0.6.0. **Same address, same storage keys, same installed app.** The data format moves from schema 5 to **6** (one new collection, `goals`); your data is converted automatically after a full copy is kept (⚙ → «Копии и данные»). Older versions of the app will show newer data read-only.

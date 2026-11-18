@@ -14,7 +14,7 @@
 // not personal data; it only lets an import notice that a backup comes from a
 // different organizer (another device or another person).
 
-import { isDateKey, isTime, isDateTime, weekKey } from './dates.js';
+import { isDateKey, isTime, isDateTime, weekKey, isoWeekday } from './dates.js';
 import { isPlainObject } from './util.js';
 
 // Version history: 1 = prototype (no number), 2 = 0.2.x, 3 = 0.3.0 (adds settings.day),
@@ -25,8 +25,11 @@ import { isPlainObject } from './util.js';
 // (it would mistake an event series for a task series) — it goes read-only instead.
 // 6 = 0.7.0 (adds the `goals` collection: goals with ordered steps, «Цели»). Nothing is converted; an older
 //     app would silently drop the new collection when saving, so it must go read-only on version-6 data.
+// 7 = 0.8.0 (a weekly rule may repeat on several weekdays: series.days; a task or event turned into the first
+//     occurrence of a rule by «Повторять» carries seriesOrigin). Nothing is converted; an older app would make
+//     the wrong dates for such a rule, so it must go read-only on version-7 data.
 // Every step only ADDS fields and collections with defaults, so upgrading never removes data.
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 export const STOCK_STATES = ['have', 'low', 'out'];
 export const COLLECTIONS = ['tasks', 'events', 'projects', 'lists', 'series', 'waiting', 'templates', 'goals'];
 export const PLAN_KINDS = ['day', 'week', 'none'];
@@ -188,6 +191,9 @@ function checkTask(r, now) {
   if (t.seriesId !== null && !isId(t.seriesId)) return fail('reason.badSeriesLink');
   t.occurrenceDate = t.occurrenceDate ?? null;
   if (t.occurrenceDate !== null && !isDateKey(t.occurrenceDate)) return fail('reason.badOccurrence');
+  // 0.8.0: `seriesOrigin` — this task existed before its rule and was made its first occurrence by «Повторять»;
+  // the rule never removes it. Only `true` on a linked task is kept.
+  if (t.seriesOrigin !== true || !t.seriesId) delete t.seriesOrigin;
   t.skipped = t.skipped ?? false;
   if (!isBool(t.skipped)) return fail('reason.badSkipped');
   t.doneDay = t.done ? (t.doneDay ?? null) : null;
@@ -238,6 +244,7 @@ function checkEvent(r, now) {
   if (e.seriesId !== undefined || e.occurrenceDate !== undefined) {
     if (!isId(e.seriesId) || !isDateKey(e.occurrenceDate)) { delete e.seriesId; delete e.occurrenceDate; }
   }
+  if (e.seriesOrigin !== true || !e.seriesId) delete e.seriesOrigin; // 0.8.0, see checkTask
   if (e.keep !== true) delete e.keep;
   const s = stamps(e, now);
   return s ? fail(s) : { value: e, nested };
@@ -362,6 +369,13 @@ function checkSeries(r, now) {
   if (x.endTime !== undefined && (x.kind !== 'event' || !isTime(x.endTime) || (x.time && x.endTime <= x.time))) delete x.endTime;
   if (x.skip !== undefined) { x.skip = Array.isArray(x.skip) ? [...new Set(x.skip.filter(isDateKey))].sort() : []; if (!x.skip.length) delete x.skip; }
   if (x.kind === 'event') { x.mode = 'fixed'; if (x.time === null) return fail('reason.badTaskTime'); } // an event needs a start time
+  // 0.8.0: weekly on chosen weekdays (1 = Monday … 7), calendar rhythm only. Absent when it would only repeat the start's
+  // weekday (the old meaning of «weekly»), so simple rules stay readable by older versions' logic.
+  if (x.days !== undefined) {
+    const d = Array.isArray(x.days) ? [...new Set(x.days.filter(n => Number.isInteger(n) && n >= 1 && n <= 7))].sort((a, b) => a - b) : [];
+    if (!d.length || x.freq !== 'weekly' || x.mode !== 'fixed' || (d.length === 1 && d[0] === isoWeekday(x.startDate))) delete x.days;
+    else x.days = d;
+  }
   const s = stamps(x, now);
   return s ? fail(s) : { value: x };
 }

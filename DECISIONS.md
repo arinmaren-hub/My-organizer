@@ -350,6 +350,25 @@ Built on 0.6.0, not rebuilt. Same address, same storage keys, same installed app
 
 **Not done.** No dates or reminders on steps (on purpose); no sub-steps; no linking a step to a task; no images or files in notes; links are not previewed.
 
+## B16. What 0.8.0 built (owner's requests of 2026-11-18) — decisions and deviations
+
+Built on 0.7.0. Same address, same storage keys, same installed app.
+
+**English is paused (owner, 2026-11-15).** New texts are written and tested in Russian only (`i18n-v8.js`). The English dictionary receives a copy of each new Russian text, so English mode shows these few texts in Russian, never a technical key. Existing English texts and the language switch stay as they were. Browser tests for new features run in Russian only (light and dark).
+
+**Notifications: declined (owner, 2026-11-18).** Real reminders while the app is closed would need a push server that stores reminder times, which breaks «data only on this device». Exporting events to Apple Calendar was offered and declined too. Nothing was built.
+
+**«Сегодня / Завтра» in «Новые дела».** A switch under the text box, shown when the box adds to today (Today, Tasks, or Calendar with today selected). It starts on «Сегодня» every time (owner's choice, not automatic in the evening). «Завтра» = the day after the *planning* day (at 3 a.m. before «day ends» it is still yesterday's planning day, so «завтра» is the calendar today). A day written in a line («в понедельник», «сегодня: …») still wins; a line with a time asks «задача или событие?» on the chosen day. Switching does not redraw the sheet (no slide-in, the keyboard stays).
+
+**«Повторять» on an event or a task.** A button in the event card, in the task editor and in both long-press menus. Choices: every day; every week (on this weekday); on chosen weekdays; every 2 weeks; every month (same date); every year; optional end date. The record itself becomes the **first occurrence** of a new rule (`seriesId`, `occurrenceDate`, new flag `seriesOrigin: true`), so there is never a second copy on its date and its preparation list, title and time stay. Everything else (n-th weekday, from completion, end time) is in the full rule editor («Изменить повтор»). A task without a date starts today and gets today's date; past dates are never filled in. For «по дням недели» the record's own weekday is always included (shown ticked, not changeable) — otherwise the record would sit on a date the rule does not produce.
+- Deleting the rule never deletes the record it started from: it becomes an ordinary task/event again (an event's date is also put in the rule's skip list, so restoring the rule makes no copy). Changing the rule never removes it either (`seriesOrigin` makes it «touched»).
+
+**Several weekdays** (`series.days`, ISO weekdays 1–7). Weekly rules only, calendar rhythm only (choosing other weekdays turns a «from completion» task rule into «by the calendar»). With «каждые N недель» every N-th week counts from the week of the start date. When only the start's own weekday is chosen, `days` is not stored (the plain old weekly rule). Weekday chips are also in the rule editor («Задачи → Повторяющиеся задачи»); with none ticked the rule repeats on the start's weekday as before. Rule text: «каждую неделю: пн, чт».
+
+**Data format: schema 6 → 7.** Only new optional fields (`series.days`, `seriesOrigin` on tasks/events). The version is raised because 0.7.0 would make the wrong dates for a rule with `days` (and could remove an untouched «origin» event when a rule changes); with 7 an older window goes read-only. Upgrade is automatic with a rollback copy.
+
+**Also:** the rule editor now shows «Конец» (events) and «Закончить после» on separate lines (they overlapped at phone width).
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure
@@ -449,9 +468,9 @@ Built on 0.6.0, not rebuilt. Same address, same storage keys, same installed app
 
 ---
 
-## D. Data model (schema version 6)
+## D. Data model (schema version 7)
 
-Document: `{ schemaVersion: 6, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, goals, settings, quarantine }`
+Document: `{ schemaVersion: 7, dataId, createdAt, updatedAt, tasks, events, projects, lists, series, waiting, templates, goals, settings, quarantine }`
 
 Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `settings.day` and `dataId`), 4 = 0.4.0 (adds the collections `series`, `waiting`, `templates`; task fields `review`, `seriesId`, `occurrenceDate`, `skipped`, `doneDay`; optional list `categories` and item `category`). Every upgrade only ADDS fields with empty defaults; no existing value is changed.
 
@@ -493,6 +512,8 @@ Version history: 1 = prototype (no number), 2 = 0.2.0–0.2.2, 3 = 0.3.0 (adds `
 **Added in 0.6.0 (schema 5; all optional and validated leniently — a wrong value is dropped, the record is kept):** series `until` (date), `monthBy` (`'nth'│'last'`), `kind` (`'event'` only), `endTime` (`'HH:MM'`, events only), `skip` (sorted date list); event `seriesId`/`occurrenceDate` (both or neither); task, event and list `keep` (`true` or absent).
 
 **Added in 0.7.0 (schema 6):** collection `goals` — **Goal:** `id, title, note (string, default ''), steps ([{ id, title, done, createdAt, updatedAt, deletedAt, doneAt? }] in the person's order), doneAt (ISO or null = reached), pausedAt? (ISO; on pause), keep? (true), createdAt, updatedAt, deletedAt`. A goal without `note` gets `''`; a step's `doneAt` and a goal's `pausedAt` are dropped if not a valid time (record kept); a goal without an id/title or whose `steps` is not a list is quarantined; a single broken step is quarantined on its own.
+
+**Added in 0.8.0 (schema 7):** `series.days?` — weekly calendar-rhythm rules only, sorted unique ISO weekdays 1–7, absent when it would be just the start's weekday (a bad value is dropped, the rule kept); `seriesOrigin?: true` on a task or event that existed before its rule and was linked by «Повторять» (kept only on a linked record).
 
 **Quarantine entry:** `{ at, source: 'load'│'import'│'legacy'│…, collection, parentId, reason, record }`.
 

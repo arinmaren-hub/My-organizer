@@ -951,7 +951,7 @@ with sync_playwright() as p:
         s = Session(lang, data=v4); pg = s.pg
         d = s.doc()
         keep = {k: d[k] for k in ('tasks', 'events', 'lists', 'templates', 'waiting')}
-        check(L + 'Данные 0.4.0 переходят на формат 6 (0.7.0), тот же dataId', d['schemaVersion'] == 6 and d['dataId'] == 'e2e-org')
+        check(L + 'Данные 0.4.0 переходят на формат 7 (0.8.0), тот же dataId', d['schemaVersion'] == 7 and d['dataId'] == 'e2e-org')
         check(L + 'Ничего не потеряно: задачи, события, списки, шаблоны, ожидания идентичны', json.dumps(keep, sort_keys=True) == json.dumps({k: v4[k] for k in keep}, sort_keys=True))
         check(L + 'Свой список «Купить» цел и отдельный от созданного «Купить»', any(l['id'] == 'ol2' and l['name'] == 'Купить' for l in d['lists']) and not any(l.get('kind') == 'home' for l in d['lists']))
         s.tab('lists')

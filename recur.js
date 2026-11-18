@@ -69,9 +69,25 @@ export function afterCompletion(series, doneDay) {
   }
 }
 
+// 0.8.0: a weekly rule on chosen weekdays (`days`, 1 = Monday … 7). Every N-th week counts, from the week (Monday)
+// that contains startDate; nothing before startDate. `limit` bounds the number of days looked at.
+export const byWeekdays = s => s.freq === 'weekly' && Array.isArray(s.days) && s.days.length > 0;
+function weekdayDatesBetween(series, after, upTo, limit) {
+  const out = [];
+  const set = new Set(series.days);
+  const monday0 = addDays(series.startDate, 1 - isoWeekday(series.startDate));
+  let d = after && after >= series.startDate ? addDays(after, 1) : series.startDate;
+  for (let i = 0; i < limit && d <= upTo; i++, d = addDays(d, 1)) {
+    if (!set.has(isoWeekday(d))) continue;
+    if (Math.floor(daysBetween(monday0, d) / 7) % series.interval === 0) out.push(d);
+  }
+  return out;
+}
+
 // Dates of a fixed series after `after` (exclusive; null = from startDate) up to `upTo` (inclusive).
 export function fixedDatesBetween(series, after, upTo, limit = LOOP_LIMIT) {
   if (series.until && series.until < upTo) upTo = series.until; // the end date is inclusive
+  if (byWeekdays(series)) return weekdayDatesBetween(series, after, upTo, limit);
   const out = [];
   let k = 0;
   if (series.freq === 'daily' || series.freq === 'weekly') {
@@ -119,6 +135,8 @@ export function ensureOccurrences(doc, ctx) {
     if (s.deletedAt || s.paused) continue;
     if (s.kind === 'event') { created += ensureEventOccurrences(doc, s, ctx); continue; }
     const mine = doc.tasks.filter(t => t.seriesId === s.id);
+    // a date in `skip` is taken for good (0.8.0: the date of a task that was unlinked from this rule)
+    const taken = d => hasPair(doc.tasks, s.id, d) || (Array.isArray(s.skip) && s.skip.includes(d));
     if (s.mode === 'completion') {
       if (mine.some(isOpen)) continue;
       let date;
@@ -133,7 +151,7 @@ export function ensureOccurrences(doc, ctx) {
         date = afterCompletion(s, base);
       }
       // a date already used (e.g. by a deleted occurrence) → the next free one
-      for (let i = 0; i < 1000 && hasPair(doc.tasks, s.id, date); i++) date = afterCompletion(s, date);
+      for (let i = 0; i < 1000 && taken(date); i++) date = afterCompletion(s, date);
       if (s.until && date > s.until) continue; // the series has ended: no further occurrence
       doc.tasks.push(makeOccurrence(s, date, ctx));
       created++;
@@ -142,7 +160,7 @@ export function ensureOccurrences(doc, ctx) {
       let dates = fixedDatesBetween(s, from, ctx.today);
       if (dates.length > MAX_CREATED_AT_ONCE) { dates = dates.slice(-MAX_CREATED_AT_ONCE); capped = true; }
       for (const d of dates) {
-        if (hasPair(doc.tasks, s.id, d)) continue;
+        if (taken(d)) continue;
         doc.tasks.push(makeOccurrence(s, d, ctx));
         created++;
       }
@@ -216,5 +234,5 @@ export function ensureEventOccurrences(doc, s, ctx) {
 export function isUntouchedEventOccurrence(e, s) {
   if (!isEventOccurrence(e) || e.deletedAt) return false;
   const { start, end } = eventTimes(s, e.occurrenceDate);
-  return e.title === s.title && e.start === start && (e.end || null) === end && !(Array.isArray(e.prep) && e.prep.some(i => !i.deletedAt)) && !e.keep;
+  return !e.seriesOrigin && e.title === s.title && e.start === start && (e.end || null) === end && !(Array.isArray(e.prep) && e.prep.some(i => !i.deletedAt)) && !e.keep;
 }

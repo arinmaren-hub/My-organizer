@@ -24,7 +24,7 @@ shutil.rmtree(SITE, ignore_errors=True)
 shutil.copytree(OLD, SITE)
 ver = lambda d: re.search(r"APP_VERSION = '([^']+)'", open(os.path.join(d, 'version.js'), encoding='utf-8').read()).group(1)
 OLD_V, NEW_V = ver(OLD), ver(NEW)
-SAME = False   # 0.6.0 moved the data format 4 → 5 and 0.7.0 moves it 5 → 6 (goals): every older version is a migration (copy «before migration», old windows become read-only)
+SAME = False   # 0.6.0 moved the data format 4 → 5 and 0.7.0 moved it 5 → 6 (goals) and 0.8.0 moves it 6 → 7 (weekdays, «Повторять»): every older version is a migration (copy «before migration», old windows become read-only)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -227,7 +227,7 @@ with sync_playwright() as p:
             before, after = P['before'], P['after']
             old_raw = before['organizer:data']
             old, new = json.loads(old_raw), json.loads(after['organizer:data'])
-            check(f'{tag}: работает новая версия {NEW_V}, формат данных 6, целей пока нет', P['page'].evaluate("import('./version.js').then(m => m.APP_VERSION)") == NEW_V and new['schemaVersion'] == 6 and new.get('goals') == [])
+            check(f'{tag}: работает новая версия {NEW_V}, формат данных 7', P['page'].evaluate("import('./version.js').then(m => m.APP_VERSION)") == NEW_V and new['schemaVersion'] == 7 and isinstance(new.get('goals'), list))
             for k, v in records(old).items():
                 check(f'{tag}: {k} — каждая запись и каждое поле без изменений ({len(v)} шт.)', records(new)[k] == records(old)[k])
             check(f'{tag}: настройки вечерней сводки и даты документа сохранены',

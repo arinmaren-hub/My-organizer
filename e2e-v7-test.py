@@ -297,7 +297,7 @@ with sync_playwright() as p:
         check(L + 'После перезапуска цель на месте', 'Записать аудиокнигу' in s.text())
         d = s.doc()
         g = d['goals'][0]
-        check(L + 'В данных схема 6 и цель со всеми шагами и заметкой', d['schemaVersion'] == 6 and len([x for x in g['steps'] if not x['deletedAt']]) == 5 and 'example.org/book' in g['note'])
+        check(L + 'В данных схема 7 и цель со всеми шагами и заметкой', d['schemaVersion'] == 7 and len([x for x in g['steps'] if not x['deletedAt']]) == 5 and 'example.org/book' in g['note'])
         check(L + 'Цели не создают задач', len([t for t in d['tasks'] if not t['deletedAt']]) == 0)
         check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
         s.close()
@@ -436,7 +436,7 @@ with sync_playwright() as p:
     @flow('ru')
     def goals_readonly_flow(lang):
         L = f'[{lang}] '
-        d = goal_doc(); d['schemaVersion'] = 7
+        d = goal_doc(); d['schemaVersion'] = 8
         s = Session(lang, data=d); pg = s.pg
         raw = pg.evaluate("localStorage.getItem('organizer:data')")
         s.tab('goals')
@@ -509,7 +509,8 @@ with sync_playwright() as p:
         urls = pg.evaluate("caches.open(%s).then(c => c.keys()).then(ks => ks.map(k => new URL(k.url).pathname))" % json.dumps(names[-1] if names else ''))
         for need in ['/goals.js', '/view-goals.js', '/i18n-v7.js']:
             check('Офлайн: новый модуль в кэше: ' + need, need in urls, str(urls)[:200])
-        check('Офлайн: в кэше версия 0.7.0', any('0.7.0' in n for n in names), str(names))
+        ver = pg.evaluate("import('./version.js').then(m => m.APP_VERSION)")
+        check('Офлайн: в кэше текущая версия приложения', any(ver in n for n in names), f'{ver} {names}')
         s.ctx.set_offline(True)
         s.reload(); s.tab('goals')
         check('Офлайн: «Цели» открываются без сети', 'Записать аудиокнигу' in s.text())

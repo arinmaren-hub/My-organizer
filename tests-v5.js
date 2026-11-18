@@ -47,9 +47,9 @@ export function registerV5(h) {
     const { store, storage } = setup({ [KEYS.data]: V4_RAW });
     ok(!store.status.readOnly);
     const before = JSON.parse(V4_RAW), after = JSON.parse(JSON.stringify(store.doc));
-    eq(SCHEMA_VERSION, 6, 'схема 0.7.0');
+    eq(SCHEMA_VERSION, 7, 'схема 0.8.0');
     for (const k of Object.keys(before)) if (k !== 'updatedAt' && k !== 'schemaVersion') eq(after[k], before[k], k);
-    eq(after.schemaVersion, 6);
+    eq(after.schemaVersion, 7);
     eq(rollbackCopies(store).length, 1, 'перед переходом на новый формат сохранена копия прежних данных');
     eq(savedDoc(storage).dataId, 'org-frozen-4');
   });

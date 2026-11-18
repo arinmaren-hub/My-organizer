@@ -3,7 +3,7 @@
 // and shows the message. Screens call these; they never edit data themselves.
 
 import { STOCK_STATES, newTask, newEvent, newProject, newList, newItem, newTemplate, newWaiting, newSeries, newGoal, PLAN_KINDS, SERIES_FREQS, SERIES_MODES, SERIES_MONTHLY_RULES } from './schema.js';
-import { isDateKey, isDateTime, isTime, weekKey, addDays } from './dates.js';
+import { isDateKey, isDateTime, isTime, weekKey, addDays, isoWeekday } from './dates.js';
 import { parseQuick } from './parsedate.js';
 import { ensureOccurrences, afterCompletion, isOpen, isUntouchedEventOccurrence, eventTimes } from './recur.js';
 import { isBuiltinId, baseOf, builtinTemplate } from './templates.js';
@@ -196,6 +196,14 @@ export function softDelete(store, collection, id) {
     r.deletedAt = now;
     r.updatedAt = now;
     if (collection === 'series') { // the open occurrences go with the series; finished ones stay as history
+      // 0.8.0: a task or event that existed before the rule («Повторять») is never removed with it: it is unlinked
+      // and stays an ordinary record (an event's date is marked as skipped, so restoring the rule makes no copy).
+      for (const x of [...d.tasks, ...d.events]) {
+        if (x.seriesId !== id || !x.seriesOrigin || x.deletedAt || x.done) continue;
+        r.skip = [...new Set([...(r.skip || []), x.occurrenceDate])].sort(); // restoring the rule makes no copy on that date
+        if ('plan' in x) { x.seriesId = null; x.occurrenceDate = null; } else { delete x.seriesId; delete x.occurrenceDate; }
+        delete x.seriesOrigin; x.updatedAt = now;
+      }
       for (const t of d.tasks) if (t.seriesId === id && isOpen(t)) { t.deletedAt = now; t.updatedAt = now; }
       if (r.kind === 'event') { // future occurrences: untouched ones were only made by the series and are removed; edited ones are kept as deleted records
         for (const e of d.events.slice()) {
@@ -476,9 +484,14 @@ function cleanSeries(f, today, fixedKind = null) {
   const interval = Number(f.interval === '' || f.interval == null ? 1 : f.interval);
   if (!Number.isInteger(interval) || interval < 1 || interval > 999) throw appError('err.badInterval');
   const isEvent = (fixedKind || f.kind) === 'event';
-  const mode = isEvent ? 'fixed' : (f.mode == null ? 'completion' : f.mode);
+  let mode = isEvent ? 'fixed' : (f.mode == null ? 'completion' : f.mode);
   if (!SERIES_MODES.includes(mode)) throw appError('err.badMode');
   const startDate = isDateKey(f.startDate) ? f.startDate : today;
+  // 0.8.0: weekly on chosen weekdays. Only the start's own weekday = the plain weekly rule (no `days`).
+  // Choosing other weekdays means a calendar rhythm, so a «from completion» task rule becomes «by the calendar».
+  let days = f.freq === 'weekly' && Array.isArray(f.days) ? [...new Set(f.days.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 7))].sort((a, b) => a - b) : [];
+  if (days.length === 1 && days[0] === isoWeekday(startDate)) days = [];
+  if (days.length) mode = 'fixed';
   const time = f.time ? String(f.time).slice(0, 5) : null;
   if (time !== null && !isTime(time)) throw appError('err.badTime');
   if (isEvent && time === null) throw appError('err.needEventTime');
@@ -487,14 +500,14 @@ function cleanSeries(f, today, fixedKind = null) {
   const monthBy = f.freq === 'monthly' && mode === 'fixed' && SERIES_MONTHLY_RULES.includes(f.monthBy) ? f.monthBy : null;
   const endTime = isEvent && f.endTime ? String(f.endTime).slice(0, 5) : null;
   if (endTime !== null && (!isTime(endTime) || endTime <= time)) throw appError('err.badEnd');
-  return { title, freq: f.freq, interval, mode, startDate, time, until, monthBy, endTime, kind: isEvent ? 'event' : null };
+  return { title, freq: f.freq, interval, mode, startDate, time, until, monthBy, endTime, kind: isEvent ? 'event' : null, days: days.length ? days : null };
 }
 
 // Optional series fields are removed instead of stored as null (they are optional in the schema).
 function applySeriesFields(s, c) {
-  const { until, monthBy, endTime, kind, ...core } = c;
+  const { until, monthBy, endTime, kind, days, ...core } = c;
   Object.assign(s, core);
-  for (const [k, v] of [['until', until], ['monthBy', monthBy], ['endTime', endTime], ['kind', kind]]) { if (v) s[k] = v; else delete s[k]; }
+  for (const [k, v] of [['until', until], ['monthBy', monthBy], ['endTime', endTime], ['kind', kind], ['days', days]]) { if (v) s[k] = v; else delete s[k]; }
 }
 
 export function addSeries(store, f) {
@@ -524,8 +537,8 @@ export function editSeries(store, id, f, applyToOpen = false) {
     if (wasMode === 'completion' && s.mode === 'fixed') s.generatedThrough = addDays(ctx.today, -1);
     s.updatedAt = ctx.now;
     if (s.kind === 'event') {
-      const same = k => (old[k] ?? null) === (s[k] ?? null);
-      const ruleChanged = !['freq', 'interval', 'startDate', 'until', 'monthBy'].every(same);
+      const same = k => JSON.stringify(old[k] ?? null) === JSON.stringify(s[k] ?? null);
+      const ruleChanged = !['freq', 'interval', 'startDate', 'until', 'monthBy', 'days'].every(same);
       const looksChanged = !['title', 'time', 'endTime'].every(same);
       for (const e of d.events.slice()) {
         if (e.seriesId !== id || e.deletedAt || e.occurrenceDate < ctx.today || !isUntouchedEventOccurrence(e, old)) continue;
@@ -544,6 +557,36 @@ export function editSeries(store, id, f, applyToOpen = false) {
       }
     }
     ensureOccurrences(d, ctx);
+  });
+}
+
+// «Повторять» (0.8.0): turns an existing task or event into the FIRST occurrence of a new repeating rule.
+// The record stays exactly as it is (title, preparation list, done state…) and is linked to the rule (marked
+// seriesOrigin), so the rule never makes a second copy for its date and never removes it. The rule starts on the
+// record's date; for a weekly rule on chosen weekdays the record's own weekday is always included.
+// A task without a date starts today (it gets today's date). Past dates are never filled in.
+// f = { freq, interval, days, monthBy, until, mode (tasks only) }. Returns the new rule's id.
+export function repeatRecord(store, coll, id, f) {
+  return store.update('act.series', (d, ctx) => {
+    const isEvent = coll === 'events';
+    const r = findAlive(isEvent ? d.events : d.tasks, id, isEvent ? 'what.event' : 'what.task');
+    if (r.seriesId) throw appError('err.alreadyRepeats');
+    const startDate = isEvent ? r.start.slice(0, 10) : r.plan.kind === 'day' ? r.plan.date : ctx.today;
+    const own = isoWeekday(startDate);
+    const days = f.freq === 'weekly' && Array.isArray(f.days) && f.days.length ? [...f.days.map(Number), own] : null;
+    const base = { freq: f.freq, interval: f.interval, monthBy: f.monthBy, until: f.until, days, title: r.title, startDate };
+    const c = isEvent
+      ? cleanSeries({ ...base, kind: 'event', time: r.start.slice(11, 16),
+          endTime: r.end && r.end.slice(0, 10) === startDate && r.end.slice(11, 16) > r.start.slice(11, 16) ? r.end.slice(11, 16) : null }, ctx.today, 'event')
+      : cleanSeries({ ...base, mode: f.mode === 'completion' ? 'completion' : 'fixed', time: r.time || null }, ctx.today, 'task');
+    const s = newSeries({ id: ctx.uid(), title: c.title, freq: c.freq, interval: c.interval, mode: c.mode, startDate: c.startDate, time: c.time, now: ctx.now });
+    applySeriesFields(s, c);
+    if (!isEvent && s.mode === 'fixed' && startDate < ctx.today) s.generatedThrough = addDays(ctx.today, -1); // no backfill
+    d.series.push(s);
+    r.seriesId = s.id; r.occurrenceDate = startDate; r.seriesOrigin = true; r.updatedAt = ctx.now;
+    if (!isEvent && r.plan.kind !== 'day') { r.plan = { kind: 'day', date: startDate }; }
+    ensureOccurrences(d, ctx);
+    return s.id;
   });
 }
 

@@ -2,7 +2,7 @@
 // title and «···». Recurring tasks are at the very bottom, folded; adding one is folded too.
 
 import { esc } from './util.js';
-import { t, formatDay } from './i18n.js';
+import { t, formatDay, weekdayShort } from './i18n.js';
 import { tasksScreen, activeSeries } from './selectors.js';
 import { taskRow, empty, foldBlock, moreButton } from './components.js';
 import { SERIES_FREQS } from './schema.js';
@@ -12,11 +12,19 @@ import { nextSteps } from './goals.js';
 import { stepRow } from './view-goals.js';
 
 export function ruleText(s) {
-  return t(`recur.rule.${s.freq}.${s.interval === 1 ? '1' : 'n'}`, { n: s.interval });
+  const base = t(`recur.rule.${s.freq}.${s.interval === 1 ? '1' : 'n'}`, { n: s.interval });
+  return s.freq === 'weekly' && Array.isArray(s.days) && s.days.length
+    ? t('recur.ruleDays', { rule: base, days: s.days.map(n => weekdayShort(n - 1).toLowerCase()).join(', ') }) : base;
+}
+
+// 0.8.0: weekday chips (1 = Monday … 7). `locked` = the weekday that is always included (shown ticked, not changeable).
+export function weekdayChips(checked = [], { locked = null, action = '' } = {}) {
+  return `<div class="wdays" role="group" aria-label="${esc(t('recur.days'))}">${[1, 2, 3, 4, 5, 6, 7].map(n =>
+    `<label class="wday"><input type="checkbox" name="days" value="${n}"${checked.includes(n) || n === locked ? ' checked' : ''}${n === locked ? ' disabled' : ''}${action ? ` data-action="${action}"` : ''}><span>${esc(weekdayShort(n - 1))}</span></label>`).join('')}</div>`;
 }
 
 export function ruleFields(s, today, { withKind = false } = {}) {
-  const sel = (name, list, cur, label) => `<select name="${name}" aria-label="${esc(t(label))}">${list.map(([v, key]) => `<option value="${v}"${cur === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}</select>`;
+  const sel = (name, list, cur, label, extra = '') => `<select name="${name}" aria-label="${esc(t(label))}"${extra}>${list.map(([v, key]) => `<option value="${v}"${cur === v ? ' selected' : ''}>${esc(t(key))}</option>`).join('')}</select>`;
   const isEvent = !!(s && s.kind === 'event');
   // Task or event: chosen when the rule is created and fixed afterwards.
   const kindRow = withKind ? `<div class="line"><span>${esc(t('recur.kind'))}</span>
@@ -24,7 +32,9 @@ export function ruleFields(s, today, { withKind = false } = {}) {
   return `${kindRow}
       <div class="line"><span>${esc(t('recur.every'))}</span>
         <input type="number" name="interval" min="1" max="999" step="1" value="${esc(s ? s.interval : 1)}" class="num" aria-label="${esc(t('recur.every'))}" required>
-        ${sel('freq', SERIES_FREQS.map(f => [f, `recur.freq.${f}`]), s ? s.freq : 'weekly', 'recur.every')}</div>
+        ${sel('freq', SERIES_FREQS.map(f => [f, `recur.freq.${f}`]), s ? s.freq : 'weekly', 'recur.every', ' data-action="rule.freq"')}</div>
+      <div data-freq="weekly"${(s ? s.freq : 'weekly') === 'weekly' ? '' : ' hidden'}>${weekdayChips(s && Array.isArray(s.days) ? s.days : [])}
+        <p class="muted small">${esc(t('recur.daysHint'))}</p></div>
       <div class="line" data-show="task"${isEvent ? ' hidden' : ''}><span>${esc(t('recur.mode'))}</span>
         ${sel('mode', [['completion', 'recur.mode.completion'], ['fixed', 'recur.mode.fixed']], s ? s.mode : 'completion', 'recur.mode')}</div>
       <p class="muted small" data-show="task"${isEvent ? ' hidden' : ''}>${esc(t('recur.modeHint.completion'))}<br>${esc(t('recur.modeHint.fixed'))}</p>
@@ -33,8 +43,8 @@ export function ruleFields(s, today, { withKind = false } = {}) {
       <p class="muted small">${esc(t('recur.monthByHint'))}</p>
       <div class="line"><label class="field grow"><span>${esc(t('recur.start'))}</span><input type="date" name="startDate" value="${esc(s ? s.startDate : today)}" required></label>
         <label class="field"><span>${esc(t('edit.time'))}</span><input type="time" name="time" value="${esc(s && s.time ? s.time : '')}"></label></div>
-      <div class="line"><label class="field grow"><span>${esc(t('recur.until'))}</span><input type="date" name="until" value="${esc(s && s.until ? s.until : '')}"></label>
-        <label class="field" data-show="event"${isEvent ? '' : ' hidden'}><span>${esc(t('recur.endTime'))}</span><input type="time" name="endTime" value="${esc(s && s.endTime ? s.endTime : '')}"></label></div>
+      <label class="field" data-show="event"${isEvent ? '' : ' hidden'}><span>${esc(t('recur.endTime'))}</span><input type="time" name="endTime" value="${esc(s && s.endTime ? s.endTime : '')}"></label>
+      <label class="field"><span>${esc(t('recur.until'))}</span><input type="date" name="until" value="${esc(s && s.until ? s.until : '')}"></label>
       <p class="muted small">${esc(t('recur.untilHint'))}</p>`;
 }
 

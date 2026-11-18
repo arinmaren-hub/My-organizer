@@ -32,10 +32,10 @@ export function registerV6(h) {
     const b = setup({ [KEYS.data]: raw });
     ok(!b.store.status.readOnly);
     const after = clone(b.store.doc);
-    eq(after.schemaVersion, 6);
+    eq(after.schemaVersion, 7);
     for (const k of ['tasks', 'events', 'series', 'lists', 'templates', 'waiting', 'projects']) eq(after[k], old[k], k);
     eq(rollbackCopies(b.store).length, 1, 'копия данных до перехода сохранена');
-    eq(SCHEMA_VERSION, 6);
+    eq(SCHEMA_VERSION, 7);
   });
 
   // ---------- recurrence ----------

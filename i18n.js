@@ -17,6 +17,7 @@ import { RU4, EN4, NAMES } from './i18n-v4.js';
 import { RU5, EN5 } from './i18n-v5.js';
 import { RU6, EN6 } from './i18n-v6.js';
 import { RU7, EN7 } from './i18n-v7.js';
+import { RU8, EN8 } from './i18n-v8.js';
 
 export const LANGS = ['ru', 'en'];
 // Each language is named in its own language, as is usual.
@@ -702,6 +703,9 @@ Object.assign(RU, RU6);
 Object.assign(EN, EN6);
 Object.assign(RU, RU7);
 Object.assign(EN, EN7);
+// 0.8.0: English is paused — the new Russian texts stand in for English ones (see i18n-v8.js).
+Object.assign(RU, RU8);
+Object.assign(EN, RU8, EN8);
 
 export const DICTS = { ru: RU, en: EN };
 

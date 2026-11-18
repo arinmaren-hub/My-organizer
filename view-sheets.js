@@ -4,11 +4,11 @@
 // the record it is about no longer exists). app.js puts the HTML into #sheet-root.
 
 import { esc } from './util.js';
-import { t, formatDay, weekdayLong, dayLong, getLang, LANGS, LANG_NAMES } from './i18n.js';
-import { isoWeekday } from './dates.js';
+import { t, formatDay, weekdayLong, weekdayShort, dayLong, getLang, LANGS, LANG_NAMES } from './i18n.js';
+import { isoWeekday, addDays } from './dates.js';
 import { ICONS } from './icons.js';
 import { editTaskForm, editEventForm, foldBlock } from './components.js';
-import { seriesEditForm, ruleFields } from './view-tasks.js';
+import { seriesEditForm, ruleFields, ruleText, weekdayChips } from './view-tasks.js';
 import { activeProjects, doneLast } from './selectors.js';
 import { listTemplates, categoriesOf, missingBuiltins } from './templates.js';
 import { stockOf, STOCK_ORDER } from './home.js';
@@ -57,6 +57,11 @@ function appMenu(doc, ctx) {
 
 function quickSheet(doc, ctx, s) {
   const q = ctx.ui.quick;
+  // 0.8.0: «Сегодня / Завтра» for the lines that name no day — offered when the box adds to today (not from another
+  // calendar date). It starts on «Сегодня» every time; a day written in the line itself still wins.
+  const switchable = s.date === ctx.today;
+  const tm = switchable && !!q.tomorrow;
+  const day = tm ? addDays(s.date, 1) : s.date;
   let ask = '';
   if (q.ask) {
     const a = q.ask;
@@ -70,8 +75,12 @@ function quickSheet(doc, ctx, s) {
   return sheet(t('quick.title'), `${ask}
     <form data-form="task.quickAdd" autocomplete="off">
       <textarea name="text" rows="4" data-focus placeholder="${esc(t('quick.placeholder'))}" aria-label="${esc(t('quick.title'))}" enterkeyhint="enter" autocapitalize="sentences">${esc(q.text)}</textarea>
-      <div class="line"><span class="muted small grow">${esc(t('quick.to', { day: { $day: s.date } }))}</span>
-        <button type="submit" class="primary">${esc(t('btn.add'))}</button></div>
+      ${switchable ? `<p class="muted small quick-to">${esc(t('quick.to', { day: { $day: day } }))}</p>
+      <div class="line"><div class="seg" role="group" aria-label="${esc(t('quick.dayAria'))}">
+          <button type="button" data-action="quick.day" data-v=""${tm ? '' : ' class="on"'} aria-pressed="${!tm}">${esc(t('quick.today'))}</button><button type="button" data-action="quick.day" data-v="1"${tm ? ' class="on"' : ''} aria-pressed="${tm}">${esc(t('quick.tomorrow'))}</button></div>
+        <button type="submit" class="primary push">${esc(t('btn.add'))}</button></div>`
+      : `<div class="line"><span class="muted small grow quick-to">${esc(t('quick.to', { day: { $day: day } }))}</span>
+        <button type="submit" class="primary">${esc(t('btn.add'))}</button></div>`}
     </form>`, 'sheet-quick');
 }
 
@@ -80,13 +89,53 @@ function quickSheet(doc, ctx, s) {
 // «Хранить всегда» / «Не хранить всегда»: a record marked this way is never offered for cleanup.
 const keepItem = (coll, r) => item('keep.toggle', t(r.keep ? 'cleanup.unkeep' : 'cleanup.keepForever'), `data-coll="${coll}" ${idAttr(r.id)} data-on="${r.keep ? '' : '1'}"`);
 
+// ---------- «Повторять» (0.8.0) ----------
+
+// «↻ Повторяется: каждую неделю» under a task or event that belongs to a rule.
+function seriesNote(doc, r) {
+  const s = r.seriesId && doc.series.find(x => x.id === r.seriesId && !x.deletedAt);
+  return s ? `<p class="muted small">${esc(t('repeat.repeats', { rule: ruleText(s) }))}</p>` : '';
+}
+// «Повторять» for a record without a rule; «Изменить повтор» (the rule's editor) for one that has a live rule.
+function repeatButton(doc, r, coll) {
+  if (r.seriesId) {
+    const s = doc.series.find(x => x.id === r.seriesId && !x.deletedAt);
+    return s ? `<button type="button" class="quiet" data-action="edit.open" data-kind="series" ${idAttr(s.id)}>${esc(t('repeat.edit'))}</button>` : '';
+  }
+  return `<button type="button" data-action="repeat.open" data-coll="${coll}" ${idAttr(r.id)}>${esc(t('repeat.btn'))}</button>`;
+}
+
+function repeatSheet(doc, ctx, s) {
+  const isEvent = s.coll === 'events';
+  const r = find(isEvent ? doc.events : doc.tasks, s.id);
+  if (!r || r.seriesId) return '';
+  const start = isEvent ? r.start.slice(0, 10) : r.plan.kind === 'day' ? r.plan.date : ctx.today;
+  const wd = isoWeekday(start);
+  const on = t(`repeat.on.${wd}`);
+  const opt = (v, label, extra = '') => `<label class="line ropt"><input type="radio" name="preset" value="${v}"${v === 'weekly' ? ' checked' : ''}${extra}> <span class="grow">${esc(label)}</span></label>`;
+  return sheet(t('repeat.title'), `<p class="title">${esc(r.title)}</p>
+    <form class="editform" data-form="repeat.save" data-coll="${esc(s.coll)}" ${idAttr(r.id)} autocomplete="off">
+      ${opt('daily', t('repeat.daily'))}
+      ${opt('weekly', t('repeat.weekly', { on }))}
+      ${opt('days', t('repeat.days'))}
+      <div class="ropt-sub">${weekdayChips([], { locked: wd, action: 'repeat.chip' })}
+        <p class="muted small">${esc(t('repeat.daysHint', { day: weekdayShort(wd - 1) }))}</p></div>
+      ${opt('biweekly', t('repeat.biweekly', { on }))}
+      ${opt('monthly', t('repeat.monthly', { n: Number(start.slice(8)) }))}
+      ${opt('yearly', t('repeat.yearly', { date: dayLong(start) }))}
+      <label class="field"><span>${esc(t('repeat.until'))}</span><input type="date" name="until" min="${esc(start)}"></label>
+      <p class="muted small">${esc(t('repeat.first', { day: { $day: start } }))} ${esc(t('repeat.more'))}</p>
+      <div class="line"><button type="submit" class="primary">${esc(t('repeat.save'))}</button><button type="button" data-action="sheet.close">${esc(t('btn.cancel'))}</button></div>
+    </form>`);
+}
+
 function taskMenu(doc, ctx, s) {
   const task = find(doc.tasks, s.id);
   if (!task) return '';
   const rows = s.part ? [item('review', t('review.keep'), `${idAttr(task.id)} data-choice="keep" data-part="${esc(s.part)}"`)] : [];
   rows.push(item('edit.open', t('btn.edit'), `data-kind="task" ${idAttr(task.id)}`), item('sheet.move', t('menu.move'), idAttr(task.id)),
     item('task.duplicate', t('menu.duplicate'), idAttr(task.id)), item('task.toWaiting', t('menu.toWaiting'), idAttr(task.id)));
-  if (!task.seriesId) rows.push(item('convert.open', t('menu.toEvent'), `data-from="task" ${idAttr(task.id)}`));
+  if (!task.seriesId) rows.push(item('repeat.open', t('repeat.btn'), `data-coll="tasks" ${idAttr(task.id)}`), item('convert.open', t('menu.toEvent'), `data-from="task" ${idAttr(task.id)}`));
   if (task.done && !task.seriesId) rows.push(keepItem('tasks', task));
   rows.push(item('task.delete', t('btn.delete'), idAttr(task.id), 'danger'));
   return sheet(task.title, menu(rows));
@@ -96,6 +145,7 @@ function eventMenu(doc, ctx, s) {
   const e = find(doc.events, s.id);
   if (!e) return '';
   return sheet(e.title, menu([item('event.open', t('menu.open'), idAttr(e.id)), item('edit.open', t('btn.edit'), `data-kind="event" ${idAttr(e.id)}`),
+    ...(e.seriesId ? [] : [item('repeat.open', t('repeat.btn'), `data-coll="events" ${idAttr(e.id)}`)]),
     item('convert.open', t('menu.toTask'), `data-from="event" ${idAttr(e.id)}`), ...(e.seriesId ? [] : [keepItem('events', e)]), item('event.delete', t('btn.delete'), idAttr(e.id), 'danger')]));
 }
 
@@ -150,7 +200,7 @@ function editSheet(doc, ctx, s) {
   if (s.kind === 'task') {
     const task = find(doc.tasks, s.id);
     if (!task) return '';
-    body = editTaskForm(task) + `<div class="line"><button type="button" class="quiet" data-action="menu.task" ${idAttr(task.id)}>${esc(t('aria.more'))}</button>${task.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button>`}</div>`;
+    body = editTaskForm(task) + seriesNote(doc, task) + `<div class="line"><button type="button" class="quiet" data-action="menu.task" ${idAttr(task.id)}>${esc(t('aria.more'))}</button>${repeatButton(doc, task, 'tasks')}${task.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button>`}</div>`;
   } else if (s.kind === 'event') {
     const e = find(doc.events, s.id);
     if (!e) return '';
@@ -206,8 +256,9 @@ function eventSheet(doc, ctx, s) {
   if (!e) return '';
   const day = e.start.slice(0, 10);
   const when = `${weekdayLong(isoWeekday(day) - 1)}, ${dayLong(day)} · ${e.start.slice(11)}${e.end ? ' – ' + (e.end.slice(0, 10) === day ? e.end.slice(11) : formatDay(e.end.slice(0, 10)) + ' ' + e.end.slice(11)) : ''}`;
-  return sheet(e.title, `<p class="muted">${esc(when)}</p>${prepBlock(e)}
+  return sheet(e.title, `<p class="muted">${esc(when)}</p>${seriesNote(doc, e)}${prepBlock(e)}
     <div class="line"><button type="button" data-action="edit.open" data-kind="event" ${idAttr(e.id)}>${esc(t('btn.edit'))}</button>
+      ${repeatButton(doc, e, 'events')}
       <button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button></div>`);
 }
 
@@ -402,6 +453,7 @@ function stepSheet(doc, ctx, s) {
 }
 
 const SHEETS = {
+  repeat: repeatSheet,
   newgoal: newGoalSheet, addsteps: addStepsSheet, goalnote: goalNoteSheet, goalrename: goalRenameSheet, goalmenu: goalMenu, stepedit: stepSheet,
   appmenu: appMenu, quick: quickSheet, taskmenu: taskMenu, eventmenu: eventMenu, waitmenu: waitMenu, seriesmenu: seriesMenu,
   move: moveSheet, pick: pickSheet, edit: editSheet, event: eventSheet, prepedit: prepEditSheet, convert: convertSheet,

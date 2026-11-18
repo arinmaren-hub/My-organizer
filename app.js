@@ -20,7 +20,7 @@ import { buildBackupText, backupFileName } from './backup.js';
 import * as A from './actions.js';
 import { renderToday } from './view-today.js';
 import { renderCalendar } from './view-calendar.js';
-import { renderTasks } from './view-tasks.js';
+import { renderTasks, ruleText } from './view-tasks.js';
 import { renderProjects } from './view-projects.js';
 import { renderLists, listsRoute } from './view-lists.js';
 import { renderGoals, goalsRoute } from './view-goals.js';
@@ -51,7 +51,8 @@ const ui = {
   list: null,           // route inside «Списки» (view-lists.js)
   goal: null,           // route inside «Цели»: null = the index, or the id of the open goal (view-goals.js)
   sheet: null,          // the open bottom sheet: { type, ... } (view-sheets.js)
-  quick: { text: '', ask: null }, // fast-entry draft survives redraws; ask = a line waiting for «задача или событие?»
+  quick: { text: '', ask: null, tomorrow: false }, // fast-entry draft survives redraws; ask = a line waiting for «задача или событие?»;
+                                                  // tomorrow (0.8.0) = «Завтра» chosen for lines that name no day
   quickDate: '',        // the day fast entry writes to (planning day on Today/Tasks, selected date in Calendar)
   tplEdit: null,
   cal: { mode: 'month', y: new Date().getFullYear(), m: new Date().getMonth() + 1, sel: dateKey(new Date()), picker: false },
@@ -503,12 +504,15 @@ const whenText = spec => (spec.kind === 'week' ? t('plan.week', { day: { $day: s
 
 // ---------- fast entry ----------
 
-// A day for the lines that name none: the planning day (Today, Tasks) or the selected date (Calendar).
-const quickDefaults = () => ({ kind: 'day', date: ui.quickDate });
+// A day for the lines that name none: the planning day (Today, Tasks) or the selected date (Calendar);
+// with «Завтра» switched on (0.8.0, only offered when that day is today) the day after the planning day.
+const quickDay = () => (ui.quick.tomorrow && ui.quickDate === ui.today ? addDays(ui.today, 1) : ui.quickDate);
+const quickDefaults = () => ({ kind: 'day', date: quickDay() });
 
 function openQuick(date) {
   ui.quickDate = date;
   ui.quick.ask = null;
+  ui.quick.tomorrow = false; // every time it starts on «Сегодня» (owner's choice)
   openSheet({ type: 'quick', date });
 }
 
@@ -542,7 +546,7 @@ function quickAnswer(how) {
     done = A.addEventFromSpec(store, spec);
     if (done) store.notify('info', 'quick.eventAdded', { title: spec.title, when: whenText(spec) });
   } else {
-    done = A.addTaskSpecs(store, [{ title: spec.raw, kind: 'day', date: ui.quickDate || ui.today, time: null, deadline: null }]);
+    done = A.addTaskSpecs(store, [{ title: spec.raw, kind: 'day', date: quickDay() || ui.today, time: null, deadline: null }]);
   }
   if (!done) return;
   ui.quick.text = ui.quick.text.split('\n').slice(1).join('\n');
@@ -851,6 +855,18 @@ const CLICK = {
   'onboarding.skip': () => A.skipOnboarding(store),
 
   // quick entry
+  // «Сегодня / Завтра» (0.8.0): changed in place, so the sheet does not slide in again and the typing goes on.
+  'quick.day': el => {
+    ui.quick.tomorrow = !!el.dataset.v;
+    const form = el.closest('form');
+    if (form && !ui.quick.ask) {
+      for (const b of form.querySelectorAll('[data-action="quick.day"]')) { const on = !!b.dataset.v === ui.quick.tomorrow; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
+      const lab = form.querySelector('.quick-to');
+      if (lab) lab.textContent = t('quick.to', { day: { $day: quickDay() } });
+      lastSheetHtml = renderSheet(store.doc, makeCtx());
+    } else { ui.quick.ask = null; render(); }
+    focusSheetField();
+  },
   'quick.asTask': () => quickAnswer('task'),
   'quick.asEvent': () => quickAnswer('event'),
   'quick.asText': () => quickAnswer('text'),
@@ -922,6 +938,9 @@ const CLICK = {
   }),
   'tpl.restoreBuiltin': el => shut(() => A.restoreBuiltinTemplates(store, String(el.dataset.bases).split(',').filter(Boolean))),
 
+  // «Повторять» (0.8.0)
+  'repeat.open': el => openSheet({ type: 'repeat', coll: el.dataset.coll, id: el.dataset.id }),
+
   // goals (0.7.0)
   'goal.open': el => openGoal(el.dataset.id, el.dataset.step),
   'menu.goal': () => { if (ui.goal) openSheet({ type: 'goalmenu', id: ui.goal }); },
@@ -967,6 +986,8 @@ const CHANGE = {
   'prep.toggle': el => A.setPrepDone(store, el.dataset.event, el.dataset.id, el.checked),
   'qty.set': el => A.setQuantity(store, el.dataset.id, el.value),
   // edit form: show only the fields that make sense for the chosen kind
+  'rule.freq': el => { for (const f of el.form.querySelectorAll('[data-freq]')) f.hidden = !f.dataset.freq.split(' ').includes(el.value); },
+  'repeat.chip': el => { const r = el.form.querySelector('input[name=preset][value=days]'); if (r) r.checked = true; },
   'edit.kind': el => { for (const f of el.form.querySelectorAll('[data-show]')) f.hidden = !f.dataset.show.split(' ').includes(el.value); },
   'import.file': el => importFile(el)
 };
@@ -1037,6 +1058,17 @@ const FORMS = {
   'series.add': f => shut(() => A.addSeries(store, seriesValues(f))),
   'series.edit': f => shut(() => A.editSeries(store, f.dataset.id, seriesValues(f), f.elements.namedItem('applyOpen').checked)),
 
+  // «Повторять» (0.8.0): the record becomes the first occurrence of a new rule; an event's card opens again to show it.
+  'repeat.save': f => shut(() => {
+    const coll = f.dataset.coll, id = f.dataset.id;
+    const sid = A.repeatRecord(store, coll, id, repeatValues(f));
+    if (!sid) return false;
+    const s = store.doc.series.find(x => x.id === sid);
+    if (s) store.notify('info', 'repeat.done', { rule: ruleText(s) });
+    if (coll === 'events') openSheet({ type: 'event', id });
+    return sid;
+  }),
+
   // goals (0.7.0)
   'goal.add': f => shut(() => {
     const id = A.addGoal(store, { title: val(f, 'title'), steps: val(f, 'steps') });
@@ -1055,7 +1087,15 @@ const FORMS = {
   }
 };
 
-const seriesValues = f => ({ title: val(f, 'title'), freq: val(f, 'freq'), interval: val(f, 'interval'), mode: val(f, 'mode'), startDate: val(f, 'startDate'), time: val(f, 'time'), kind: val(f, 'kind') === 'event' ? 'event' : null, until: val(f, 'until'), monthBy: val(f, 'monthBy'), endTime: val(f, 'endTime') });
+const checkedDays = f => [...f.querySelectorAll('input[name=days]:checked')].map(i => Number(i.value));
+const seriesValues = f => ({ title: val(f, 'title'), freq: val(f, 'freq'), interval: val(f, 'interval'), mode: val(f, 'mode'), startDate: val(f, 'startDate'), time: val(f, 'time'), kind: val(f, 'kind') === 'event' ? 'event' : null, until: val(f, 'until'), monthBy: val(f, 'monthBy'), endTime: val(f, 'endTime'), days: checkedDays(f) });
+// «Повторять»: the chosen line → a rule. Weekdays count only with «По дням недели».
+const REPEAT_PRESETS = { daily: ['daily', 1], weekly: ['weekly', 1], days: ['weekly', 1], biweekly: ['weekly', 2], monthly: ['monthly', 1], yearly: ['yearly', 1] };
+function repeatValues(f) {
+  const p = (f.querySelector('input[name=preset]:checked') || {}).value || 'weekly';
+  const [freq, interval] = REPEAT_PRESETS[p] || REPEAT_PRESETS.weekly;
+  return { freq, interval, days: p === 'days' ? checkedDays(f) : null, until: val(f, 'until') };
+}
 
 const errText = e => (e && e.key ? m(e.key, e.params) : (e && e.message) || String(e));
 

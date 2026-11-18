@@ -32,16 +32,16 @@ export function registerV7(h) {
     const b = setup({ [KEYS.data]: JSON.stringify(old) });
     ok(!b.store.status.readOnly);
     const after = clone(b.store.doc);
-    eq(after.schemaVersion, 6);
-    eq(SCHEMA_VERSION, 6);
+    eq(after.schemaVersion, 7);
+    eq(SCHEMA_VERSION, 7);
     for (const k of ['tasks', 'events', 'series', 'lists', 'templates', 'waiting', 'projects', 'settings', 'quarantine', 'dataId']) eq(after[k], old[k], k);
     eq(after.goals, [], 'целей пока нет');
     eq(rollbackCopies(b.store).length, 1, 'копия данных до перехода сохранена');
-    eq(savedDoc(b.storage).schemaVersion, 6);
+    eq(savedDoc(b.storage).schemaVersion, 7);
   });
 
-  test(G, 'данные новее (схема 7) открываются только для чтения и не меняются', () => {
-    const raw = JSON.stringify({ ...emptyDoc(NOW), schemaVersion: 7, goals: [{ id: 'g', title: 'X', steps: [] }] });
+  test(G, 'данные новее (схема 8) открываются только для чтения и не меняются', () => {
+    const raw = JSON.stringify({ ...emptyDoc(NOW), schemaVersion: 8, goals: [{ id: 'g', title: 'X', steps: [] }] });
     const { store, storage } = setup({ [KEYS.data]: raw });
     ok(store.status.readOnly);
     eq(storage.get(KEYS.data), raw);
@@ -255,7 +255,7 @@ export function registerV7(h) {
     A.addGoal(store, { title: 'Аудиокнига', steps: 'тест\nзапись', note: 'идея' });
     A.setGoalStepDone(store, goal(store).id, goal(store).steps[0].id, true);
     const text = buildBackupText(store.doc, NOW);
-    eq(JSON.parse(text).schemaVersion, 6);
+    eq(JSON.parse(text).schemaVersion, 7);
     const p = parseBackupText(text, NOW);
     ok(p.ok);
     eq(p.doc.goals, store.doc.goals);
