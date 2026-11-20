@@ -97,7 +97,7 @@ export function editTaskForm(task) {
       <label class="field" data-show="day"${kind === 'day' ? '' : ' hidden'}><span>${esc(t('edit.time'))}</span><input type="time" name="time" value="${esc(task.time || '')}"></label>
       <label class="field"><span>${esc(t('edit.deadline'))}</span><input type="date" name="deadline" value="${esc(task.deadline || '')}"></label>
       <p class="muted small">${esc(t('edit.deadlineNote'))}</p>
-      <div class="line"><button type="submit" class="primary">${esc(t('btn.save'))}</button><button type="button" data-action="sheet.close">${esc(t('btn.cancel'))}</button></div>
+      <button type="submit" class="primary wide">${esc(t('btn.save'))}</button>
     </form>`;
 }
 
@@ -108,7 +108,7 @@ export function editEventForm(e) {
       <label class="field"><span>${esc(t('edit.title'))}</span><input name="title" value="${esc(e.title)}" required class="grow"></label>
       <label class="field"><span>${esc(t('edit.start'))}</span><input type="datetime-local" name="start" value="${esc(e.start)}" required></label>
       <label class="field"><span>${esc(t('edit.end'))}</span><input type="datetime-local" name="end" value="${esc(e.end || '')}"></label>
-      <div class="line"><button type="submit" class="primary">${esc(t('btn.save'))}</button><button type="button" data-action="sheet.close">${esc(t('btn.cancel'))}</button></div>
+      <button type="submit" class="primary wide">${esc(t('btn.save'))}</button>
     </form>`;
 }
 

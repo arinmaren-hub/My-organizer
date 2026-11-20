@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.2 — 2026-11-19 — move rows by holding them
+
+Built on 0.9.1. Same address, same storage keys, **same data format (schema 7)**: nothing is converted.
+
+- **Change the order in ordinary lists and in a goal's steps (owner's request).** Hold a row still for a moment: it lifts. Move it up or down: the other rows make room. Let go: the new order is saved. Moving the finger right away still scrolls the page, and a quick tap still opens the row.
+  - Lists: unfinished items can be moved within their own list and category. Finished items stay at the bottom. Templates can be reordered too.
+  - Goals: on the goal's own screen. «Выше / Ниже» in the step's window still work.
+  - Not in «Задачи», «Дом» or «Купить»: those keep their own order.
+
+## 0.9.1 — 2026-11-19 — calmer editors
+
+Built on 0.9.0. Same address, same storage keys, **same data format (schema 7)**: nothing is converted.
+
+- **Less visual noise (owner's request).** The task editor, the event editor and the event card no longer show a row of buttons of different sizes. There is one wide «Сохранить» (closing is the ✕ at the top), then one list of equal rows, the same as the long-press menu, with «Удалить» last in red:
+  - task editor: Повторять, Сделать событием, Другие действия, Удалить;
+  - event card: Изменить, Повторять, Сделать задачей, Удалить;
+  - repeating items: «Изменить повтор» instead of «Повторять», and no «Сделать …».
+- The event editor no longer offers «Сделать задачей» for a repeating event (it was still there after 0.9.0).
+
 ## 0.9.0 — 2026-11-18 — repeat in words, delete all at once
 
 Built on 0.8.1. Same address, same storage keys, **same data format (schema 7)**: nothing is converted.

@@ -190,7 +190,7 @@ with sync_playwright() as p:
 
     # 0.9.0 — Russian only (English is paused). The page clock is Friday 9 October 2026, 12:00.
     def d9(**kw):
-        d = doc4(**kw); d['schemaVersion'] = 7; d['goals'] = []
+        d = doc4(**kw); d['schemaVersion'] = 7; d.setdefault('goals', [])
         return d
     def banners(pg):
         return pg.inner_text('#banners')
@@ -254,8 +254,9 @@ with sync_playwright() as p:
         n0 = len(s.events('Тренировка в зале'))
         check(L + 'Повторяющееся событие создано', n0 > 10 and rule(s)['kind'] == 'event', str(n0))
         s.tab('calendar'); open_event(s, '2026-10-17', 'Тренировка в зале')
-        btns = pg.locator('#sheet-root .sheet .line button').all_inner_texts()
-        check(L + 'В карточке: «Изменить», «Изменить повтор», «Удалить»; «Сделать задачей» нет', btns == ['Изменить', 'Изменить повтор', 'Удалить'], str(btns))
+        btns = [b.strip() for b in pg.locator('#sheet-root .sheet .menuitem').all_inner_texts()]
+        check(L + 'В карточке одним списком: «Изменить», «Изменить повтор», «Удалить»; «Сделать задачей» нет', btns == ['Изменить', 'Изменить повтор', 'Удалить'], str(btns))
+        check(L + 'В карточке нет кнопок разного размера: только строки списка', pg.locator('#sheet-root .sheet .line button').count() == 0)
         pg.click('#sheet-root [data-action="event.delete"]'); s.wait_sheet()
         opts = pg.locator('#sheet-root .menuitem').all_inner_texts()
         check(L + 'Выбор: «Только это» / «Это и все следующие»', len(opts) == 2 and opts[0].startswith('Только это') and opts[1].startswith('Это и все следующие'), str(opts))
@@ -285,12 +286,16 @@ with sync_playwright() as p:
         L = '[ru] '
         s = Session(lang, data=d9(events=[event('e1', 'Ужин', '2026-10-12T19:00')], tasks=[task('n1', 'Купить хлеб')])); pg = s.pg
         s.tab('calendar'); open_event(s, '2026-10-12', 'Ужин')
-        btns = pg.locator('#sheet-root .sheet .line button').all_inner_texts()
-        check(L + 'Обычное событие: «Удалить» прямо в карточке', 'Удалить' in btns and 'Сделать задачей' in btns, str(btns))
+        btns = [b.strip() for b in pg.locator('#sheet-root .sheet .menuitem').all_inner_texts()]
+        check(L + 'Обычное событие: список «Изменить, Повторять, Сделать задачей, Удалить»', btns == ['Изменить', 'Повторять', 'Сделать задачей', 'Удалить'], str(btns))
         pg.click('#sheet-root [data-action="event.delete"]'); pg.wait_for_timeout(80)
         check(L + 'Обычное: спрашивает подтверждение и удаляет', len(s.dialogs) == 1 and not s.events('Ужин'))
         s.tab('tasks'); s.open_title('Купить хлеб')
         check(L + 'В задаче «Удалить» прямо в окне', pg.locator('#sheet-root [data-action="task.delete"]').count() == 1)
+        rows = [b.strip() for b in pg.locator('#sheet-root .sheet .menuitem').all_inner_texts()]
+        check(L + 'Окно задачи: одна широкая «Сохранить», затем список «Повторять, Сделать событием, Другие действия, Удалить»',
+              pg.locator('#sheet-root form[data-form="task.edit"] button').count() == 1 and rows == ['Повторять', 'Сделать событием', 'Другие действия', 'Удалить'], str(rows))
+        check(L + 'Строки списка одной высоты', len(set(round(b['height']) for b in pg.evaluate("[...document.querySelectorAll('#sheet-root .menuitem')].map(e => e.getBoundingClientRect().toJSON())"))) == 1)
         pg.click('#sheet-root [data-action="task.delete"]'); pg.wait_for_timeout(80)
         check(L + 'Задача удалена (с подтверждением)', not s.tasks('Купить хлеб') and len(s.dialogs) == 2)
         add_training(s)
@@ -339,6 +344,8 @@ with sync_playwright() as p:
             s.tab('calendar'); open_event(s, '2026-10-13', 'Тренировка в зале'); look('repeating-event-card')
             pg.click('#sheet-root [data-action="event.delete"]'); s.wait_sheet(); look('delete-choice')
             s.close_sheet(); open_event(s, '2026-10-12', 'Ужин'); look('event-card')
+            s.close_sheet(); s.tab('today'); s.fab(); pg.fill('#sheet-root textarea[name=text]', 'Купить хлеб'); pg.click('#sheet-root form[data-form="task.quickAdd"] button[type=submit]'); pg.wait_for_timeout(80)
+            s.tab('tasks'); s.open_title('Купить хлеб'); look('task-editor')
             s.close_sheet()
             check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
             s.close()
@@ -359,6 +366,96 @@ with sync_playwright() as p:
         s.reload(); s.quick('Йога по вторникам'); pg.wait_for_timeout(100)
         check('Офлайн: повтор словами работает без сети', any(x['title'] == 'Йога' and x['days'] == [2] or (x['title'] == 'Йога' and x['freq'] == 'weekly') for x in s.doc()['series']))
         s.ctx.set_offline(False)
+        s.close()
+
+
+    # =============================================================== 0.9.2: moving rows by long press
+    def titles_in(pg, sel='#main .irow'):
+        return [x.strip() for x in pg.locator(sel + ' .title').all_inner_texts()]
+    def mouse_drag(s, row, target, after=True, hold=650, shot=None):
+        pg = s.pg
+        b = row.bounding_box(); t = target.bounding_box()
+        x = b['x'] + b['width'] * 0.6; y = b['y'] + b['height'] / 2
+        ty = t['y'] + t['height'] * (0.85 if after else 0.15)
+        pg.mouse.move(x, y); pg.mouse.down(); pg.wait_for_timeout(hold)
+        lifted = pg.locator('.lifted').count() == 1
+        for i in range(1, 13):
+            pg.mouse.move(x, y + (ty - y) * i / 12); pg.wait_for_timeout(16)
+            if i == 7 and shot: pg.wait_for_timeout(200); pg.screenshot(path=os.path.join(SHOTS, shot))
+        pg.mouse.up(); pg.wait_for_timeout(120); s.tick(1000)
+        return lifted
+    def touch_drag(s, row, target, after=True, hold=650):
+        pg = s.pg
+        cdp = pg.context.new_cdp_session(pg)
+        b = row.bounding_box(); t = target.bounding_box()
+        x = b['x'] + b['width'] * 0.6; y = b['y'] + b['height'] / 2
+        ty = t['y'] + t['height'] * (0.85 if after else 0.15)
+        sy = pg.evaluate('scrollY')
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': x, 'y': y}]})
+        pg.wait_for_timeout(hold)
+        lifted = pg.locator('.lifted').count() == 1
+        for i in range(1, 13):
+            cdp.send('Input.dispatchTouchEvent', {'type': 'touchMove', 'touchPoints': [{'x': x, 'y': y + (ty - y) * i / 12}]}); pg.wait_for_timeout(16)
+        no_scroll = pg.evaluate('scrollY') == sy
+        cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []}); pg.wait_for_timeout(120); s.tick(1000)
+        return lifted, no_scroll
+
+    @flow('ru')
+    def reorder_list_flow(lang):
+        L = '[ru] '
+        items = ['Хочу белую юбку', 'Розовый кардиган', 'Голубые перчатки', 'Голубую косынку', 'Лама мех шарф']
+        lst = {"id": "l1", "name": "Шоппинг одежда", "kind": None, "categories": [], "items": [
+            {"id": f"i{k}", "title": tt, "done": False, "category": None, "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None} for k, tt in enumerate(items)],
+            "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None}
+        lst['items'][4]['done'] = True
+        s = Session(lang, data=d9(lists=[lst])); pg = s.pg
+        s.tab('lists'); pg.locator('#main [data-action="list.open"]', has_text='Шоппинг одежда').first.click(); pg.wait_for_timeout(60)
+        check(L + 'Список открыт', titles_in(pg)[:4] == items[:4], str(titles_in(pg)))
+        check(L + 'Перетаскивать можно только несделанные', pg.locator('#main .irow[data-drag]').count() == 4 and pg.locator('#main .irow.is-done[data-drag]').count() == 0)
+        rows = lambda: pg.locator('#main .irow[data-drag]')
+        lifted = mouse_drag(s, rows().nth(3), rows().nth(0), after=False, shot='v92-list-dragging.png')
+        check(L + 'Долгое нажатие поднимает строку', lifted)
+        check(L + 'Мышью: «косынка» стала первой', titles_in(pg)[:4] == ['Голубую косынку', 'Хочу белую юбку', 'Розовый кардиган', 'Голубые перчатки'], str(titles_in(pg)))
+        check(L + 'После перестановки не открылось окно пункта', s.no_sheet())
+        check(L + 'Порядок сохранён в данных', [i['title'] for i in s.doc()['lists'][0]['items']] == ['Голубую косынку', 'Хочу белую юбку', 'Розовый кардиган', 'Голубые перчатки', 'Лама мех шарф'])
+        lifted, no_scroll = touch_drag(s, rows().nth(0), rows().nth(2), after=True)
+        check(L + 'Пальцем: строка поднимается, страница не прокручивается', lifted and no_scroll, str((lifted, no_scroll)))
+        check(L + 'Пальцем: «косынка» встала после «кардигана»', titles_in(pg)[:4] == ['Хочу белую юбку', 'Розовый кардиган', 'Голубую косынку', 'Голубые перчатки'], str(titles_in(pg)))
+        # a quick tap still opens the item; a short drag (scroll) moves nothing
+        rows().nth(0).locator('.ttext').click(); s.wait_sheet()
+        check(L + 'Обычный тап по пункту по-прежнему открывает его', pg.locator('#sheet-root form[data-form="item.edit"]').count() == 1)
+        s.close_sheet()
+        b = rows().nth(1).bounding_box()
+        pg.mouse.move(b['x'] + 100, b['y'] + 10); pg.mouse.down(); pg.mouse.move(b['x'] + 100, b['y'] + 80, steps=5); pg.wait_for_timeout(700); pg.mouse.up(); s.tick(1000)
+        check(L + 'Движение без удержания ничего не переставляет', titles_in(pg)[:4] == ['Хочу белую юбку', 'Розовый кардиган', 'Голубую косынку', 'Голубые перчатки'] and pg.locator('.lifted').count() == 0)
+        s.reload(); s.tab('lists'); pg.locator('#main [data-action="list.open"]', has_text='Шоппинг одежда').first.click(); pg.wait_for_timeout(60)
+        check(L + 'После перезапуска порядок тот же', titles_in(pg)[:4] == ['Хочу белую юбку', 'Розовый кардиган', 'Голубую косынку', 'Голубые перчатки'])
+        check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
+        s.close()
+
+    @flow('ru')
+    def reorder_steps_flow(lang):
+        L = '[ru] '
+        st = lambda i, tt, done=False: {"id": i, "title": tt, "done": done, "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None, **({"doneAt": NOWISO} if done else {})}
+        goal = {"id": "g1", "title": "Раскопки агоры", "note": "", "steps": [st('a', 'Написать поллали'), st('b', 'Заполнить анкету'), st('c', 'Купить билеты')],
+                "doneAt": None, "createdAt": NOWISO, "updatedAt": NOWISO, "deletedAt": None}
+        s = Session(lang, data=d9(goals=[goal])); pg = s.pg
+        s.tab('tasks')
+        check(L + 'В «Задачах» шаги целей не перетаскиваются', pg.locator('#main .gsrow[data-drag]').count() == 0)
+        s.tab('goals'); pg.locator('#main .goalrow', has_text='Раскопки агоры').click(); pg.wait_for_timeout(60)
+        rows = lambda: pg.locator('#main .gsrow[data-drag]')
+        check(L + 'В цели шаги можно перетаскивать', rows().count() == 3)
+        lifted = mouse_drag(s, rows().nth(2), rows().nth(0), after=False, shot='v92-steps-dragging.png')
+        check(L + 'Шаг поднят и переставлен в начало', lifted and titles_in(pg, '#main .gsrow') == ['Купить билеты', 'Написать поллали', 'Заполнить анкету'], str(titles_in(pg, '#main .gsrow')))
+        check(L + '«Следующий шаг» — теперь первый', 'next' in rows().nth(0).get_attribute('class'))
+        check(L + 'Окно шага не открылось', s.no_sheet())
+        lifted, no_scroll = touch_drag(s, rows().nth(0), rows().nth(2), after=True)
+        check(L + 'Пальцем: шаг переставлен в конец', titles_in(pg, '#main .gsrow') == ['Написать поллали', 'Заполнить анкету', 'Купить билеты'] and no_scroll)
+        check(L + 'Порядок в данных', [x['title'] for x in s.doc()['goals'][0]['steps']] == ['Написать поллали', 'Заполнить анкету', 'Купить билеты'])
+        rows().nth(1).locator('.ttext').click(); s.wait_sheet()
+        check(L + 'Тап по шагу открывает его окно (с «Выше / Ниже»)', pg.locator('#sheet-root [data-action="step.move"]').count() >= 1)
+        s.close_sheet()
+        check(L + 'Нет ошибок страницы', not s.errors, str(s.errors[:2]))
         s.close()
 
     # =============================================================== runner

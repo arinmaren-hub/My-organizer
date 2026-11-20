@@ -74,7 +74,9 @@ function homeScreen(doc) {
 function itemRow(c, coll, i) {
   const cid = esc(c.id), iid = esc(i.id);
   const check = coll === 'lists' ? `<input type="checkbox" data-action="item.toggle" data-list="${cid}" data-id="${iid}" ${i.done ? 'checked' : ''} aria-label="${esc(t('aria.done'))}">` : '';
-  return `<div class="row irow${i.done ? ' is-done' : ''}">${check}
+  // 0.9.2: a long press lifts an unfinished item and lets it be moved among its neighbours (same list, same category)
+  const drag = coll === 'templates' || !i.done ? ` data-drag="${coll}|${cid}|${esc(i.category || '')}" data-id="${iid}"` : '';
+  return `<div class="row irow${i.done ? ' is-done' : ''}"${drag}>${check}
     <div class="grow ttext" data-action="edit.open" data-kind="item" data-coll="${coll}" data-list="${cid}" data-id="${iid}" role="button" tabindex="0"><div class="title">${esc(i.title)}</div></div></div>`;
 }
 

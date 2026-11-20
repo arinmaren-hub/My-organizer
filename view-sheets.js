@@ -99,12 +99,28 @@ function seriesNote(doc, r) {
   return s ? `<p class="muted small">${esc(t('repeat.repeats', { rule: ruleText(s) }))}</p>` : '';
 }
 // «Повторять» for a record without a rule; «Изменить повтор» (the rule's editor) for one that has a live rule.
-function repeatButton(doc, r, coll) {
+// As a row of the actions list (0.9.1: one calm list of equal rows instead of buttons of different sizes).
+function repeatItem(doc, r, coll) {
   if (r.seriesId) {
     const s = doc.series.find(x => x.id === r.seriesId && !x.deletedAt);
-    return s ? `<button type="button" class="quiet" data-action="edit.open" data-kind="series" ${idAttr(s.id)}>${esc(t('repeat.edit'))}</button>` : '';
+    return s ? [item('edit.open', t('repeat.edit'), `data-kind="series" ${idAttr(s.id)}`)] : [];
   }
-  return `<button type="button" data-action="repeat.open" data-coll="${coll}" ${idAttr(r.id)}>${esc(t('repeat.btn'))}</button>`;
+  return [item('repeat.open', t('repeat.btn'), `data-coll="${coll}" ${idAttr(r.id)}`)];
+}
+
+// The actions under a task or event (card or editor): equal rows, «Удалить» last in red.
+function taskActions(doc, task) {
+  return menu([...repeatItem(doc, task, 'tasks'),
+    ...(task.seriesId ? [] : [item('convert.open', t('menu.toEvent'), `data-from="task" ${idAttr(task.id)}`)]),
+    item('menu.task', t('edit.moreActions'), idAttr(task.id)),
+    item('task.delete', t('btn.delete'), idAttr(task.id), 'danger')]);
+}
+function eventActions(doc, e, { withEdit = false } = {}) {
+  return menu([...(withEdit ? [item('edit.open', t('btn.edit'), `data-kind="event" ${idAttr(e.id)}`)] : []),
+    ...repeatItem(doc, e, 'events'),
+    ...(e.seriesId ? [] : [item('convert.open', t('menu.toTask'), `data-from="event" ${idAttr(e.id)}`)]),
+    ...(withEdit ? [] : [item('menu.event', t('edit.moreActions'), idAttr(e.id))]),
+    item('event.delete', t('btn.delete'), idAttr(e.id), 'danger')]);
 }
 
 function repeatSheet(doc, ctx, s) {
@@ -220,11 +236,11 @@ function editSheet(doc, ctx, s) {
   if (s.kind === 'task') {
     const task = find(doc.tasks, s.id);
     if (!task) return '';
-    body = editTaskForm(task) + seriesNote(doc, task) + `<div class="line"><button type="button" class="quiet" data-action="menu.task" ${idAttr(task.id)}>${esc(t('aria.more'))}</button>${repeatButton(doc, task, 'tasks')}${task.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="task" ${idAttr(task.id)}>${esc(t('menu.toEvent'))}</button>`}<button type="button" class="quiet danger-text" data-action="task.delete" ${idAttr(task.id)}>${esc(t('btn.delete'))}</button></div>`;
+    body = editTaskForm(task) + seriesNote(doc, task) + taskActions(doc, task);
   } else if (s.kind === 'event') {
     const e = find(doc.events, s.id);
     if (!e) return '';
-    body = editEventForm(e) + `<div class="line"><button type="button" class="quiet" data-action="menu.event" ${idAttr(e.id)}>${esc(t('aria.more'))}</button><button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button></div>`;
+    body = editEventForm(e) + eventActions(doc, e);
   } else if (s.kind === 'waiting') {
     const w = find(doc.waiting, s.id);
     if (!w) return '';
@@ -277,10 +293,7 @@ function eventSheet(doc, ctx, s) {
   const day = e.start.slice(0, 10);
   const when = `${weekdayLong(isoWeekday(day) - 1)}, ${dayLong(day)} · ${e.start.slice(11)}${e.end ? ' – ' + (e.end.slice(0, 10) === day ? e.end.slice(11) : formatDay(e.end.slice(0, 10)) + ' ' + e.end.slice(11)) : ''}`;
   return sheet(e.title, `<p class="muted">${esc(when)}</p>${seriesNote(doc, e)}${prepBlock(e)}
-    <div class="line"><button type="button" data-action="edit.open" data-kind="event" ${idAttr(e.id)}>${esc(t('btn.edit'))}</button>
-      ${repeatButton(doc, e, 'events')}
-      ${e.seriesId ? '' : `<button type="button" class="quiet" data-action="convert.open" data-from="event" ${idAttr(e.id)}>${esc(t('menu.toTask'))}</button>`}
-      <button type="button" class="quiet danger-text" data-action="event.delete" ${idAttr(e.id)}>${esc(t('btn.delete'))}</button></div>`);
+    ${eventActions(doc, e, { withEdit: true })}`);
 }
 
 function prepEditSheet(doc, ctx, s) {

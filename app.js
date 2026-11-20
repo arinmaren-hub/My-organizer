@@ -1220,7 +1220,7 @@ function endGesture() {
 document.addEventListener('pointerdown', e => {
   if (ui.sheet || (e.pointerType === 'mouse' && e.button !== 0)) return;
   const row = e.target.closest && e.target.closest(ROW_SEL);
-  if (!row || e.target.closest('input, button, a, select, textarea')) return;
+  if (!row || row.hasAttribute('data-drag') || e.target.closest('input, button, a, select, textarea')) return;
   endGesture();
   gesture = { row, x: e.clientX, y: e.clientY, mode: null, swipe: row.hasAttribute('data-swipe'), pid: e.pointerId, dx: 0 };
   gesture.timer = setTimeout(() => {
@@ -1264,8 +1264,94 @@ document.addEventListener('pointerup', e => {
 });
 document.addEventListener('pointercancel', () => { endGesture(); if (suppressUntil === Infinity) suppressUntil = Date.now() + 400; });
 
+// ---------- moving rows by long press (0.9.2): ordinary lists, templates, the steps of a goal ----------
+// Hold a row still for a moment: it lifts; move the finger up or down: the neighbours make room; release: the new
+// order is saved. Moving the finger before the row lifts is ordinary scrolling. Touch uses touch events (so the page
+// can be kept from scrolling while a row is lifted); a mouse or pen uses pointer events. Tasks are never dragged.
+const DRAG_HOLD = 450;
+let drag = null;
+
+const dragRowsOf = row => [...row.parentElement.children].filter(r => r.dataset && r.dataset.drag === row.dataset.drag);
+function dragClear(d) {
+  for (const r of d.rows || [d.row]) { r.style.transform = ''; r.classList.remove('lifted', 'drag-shift'); }
+  document.documentElement.classList.remove('dragging');
+}
+function dragCancel() {
+  const d = drag; if (!d) return;
+  clearTimeout(d.timer); dragClear(d); drag = null;
+  if (d.active) suppressUntil = Date.now() + 400;
+}
+function dragStart(row, x, y, pid) {
+  dragCancel();
+  drag = { row, x, y, pid, active: false };
+  drag.timer = setTimeout(() => {
+    const d = drag; if (!d || !d.row.isConnected) return;
+    d.active = true;
+    d.rows = dragRowsOf(d.row);
+    d.idx = d.to = d.rows.indexOf(d.row);
+    d.scroll0 = window.scrollY;
+    d.mids = d.rows.map(r => { const b = r.getBoundingClientRect(); return b.top + b.height / 2 + d.scroll0; });
+    d.h = d.row.getBoundingClientRect().height;
+    for (const r of d.rows) if (r !== d.row) r.classList.add('drag-shift');
+    d.row.classList.add('lifted');
+    document.documentElement.classList.add('dragging');
+    suppressUntil = Infinity;
+  }, DRAG_HOLD);
+}
+function dragMove(x, y) {
+  const d = drag; if (!d) return false;
+  if (!d.active) { if (Math.abs(x - d.x) > 8 || Math.abs(y - d.y) > 8) dragCancel(); return false; }
+  if (y < 80) window.scrollBy(0, -10); else if (y > window.innerHeight - 150) window.scrollBy(0, 10);
+  const dy = y - d.y + (window.scrollY - d.scroll0);
+  d.row.style.transform = `translateY(${dy}px)`;
+  const centre = d.mids[d.idx] + dy;
+  d.to = d.mids.filter((m, j) => j !== d.idx && m < centre).length;
+  d.rows.forEach((r, j) => {
+    if (j === d.idx) return;
+    const shift = d.idx < d.to && j > d.idx && j <= d.to ? -d.h : d.to < d.idx && j >= d.to && j < d.idx ? d.h : 0;
+    r.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+  return true;
+}
+function dragEnd() {
+  const d = drag; if (!d) return;
+  clearTimeout(d.timer);
+  if (!d.active) { drag = null; return; }
+  const ids = d.rows.map(r => r.dataset.id);
+  const [moved] = ids.splice(d.idx, 1);
+  ids.splice(d.to, 0, moved);
+  dragClear(d); drag = null;
+  suppressUntil = Date.now() + 400;
+  if (d.to === d.idx) return;
+  const [kind, owner] = d.row.dataset.drag.split('|');
+  if (kind === 'goal') A.reorderSteps(store, owner, ids); else A.reorderItems(store, kind, owner, ids);
+}
+const dragRowAt = target => {
+  if (ui.sheet || !target.closest || target.closest('input, button, a, select, textarea')) return null;
+  return target.closest('[data-drag]');
+};
+document.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) { dragCancel(); return; }
+  const row = dragRowAt(e.target);
+  if (row) dragStart(row, e.touches[0].clientX, e.touches[0].clientY, 'touch');
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!drag || drag.pid !== 'touch') return;
+  if (dragMove(e.touches[0].clientX, e.touches[0].clientY)) e.preventDefault(); // a lifted row: the page does not scroll
+}, { passive: false });
+document.addEventListener('touchend', () => { if (drag && drag.pid === 'touch') dragEnd(); });
+document.addEventListener('touchcancel', () => { if (drag && drag.pid === 'touch') dragCancel(); });
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch' || e.button !== 0) return;
+  const row = dragRowAt(e.target);
+  if (row) dragStart(row, e.clientX, e.clientY, e.pointerId);
+});
+document.addEventListener('pointermove', e => { if (drag && drag.pid === e.pointerId) dragMove(e.clientX, e.clientY); });
+document.addEventListener('pointerup', e => { if (drag && drag.pid === e.pointerId) dragEnd(); });
+
 // A right click opens the same menu as a long press.
 document.addEventListener('contextmenu', e => {
+  if (drag) { e.preventDefault(); return; } // a long press that lifts a row is not a right click
   const row = e.target.closest && e.target.closest(ROW_SEL);
   if (row && !ui.sheet && !e.target.closest('input, textarea, select')) { e.preventDefault(); openRowMenu(row); }
 });

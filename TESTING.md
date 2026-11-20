@@ -1,6 +1,8 @@
-# TESTING.md — version 0.9.0
+# TESTING.md — version 0.9.2
 
-## 1. What was actually tested (2026-11-18, by Claude)
+## 1. What was actually tested (2026-11-19, by Claude)
+
+**0.9.2** = 0.9.0 + calmer editors (0.9.1) + moving list items and goal steps by holding them. There is no data change. The whole gate below was run again on 0.9.2, and the numbers are from that run.
 
 **Environment:** headless **Chromium 153** driven by **Playwright 1.63** on Linux. The screen was iPhone-sized (390 × 844, touch), plus 320 px for narrow checks, served from a local http server with a simulated clock (Friday 9 October 2026; the upgrade test uses the real clock). **Only Chromium was used: no WebKit, no Safari, no real iPhone or iPad.**
 
@@ -8,15 +10,15 @@ All results are from the final code:
 
 | Test set | Result | Notes |
 |---|---|---|
-| `tests.html` unit tests | **390 / 390** in each of five time zones | UTC, America/Los_Angeles, Pacific/Kiritimati, Pacific/Auckland, Europe/Athens. 13 new tests for 0.9.0 cover: repeat words (weekdays in any form, «по …ам», будни/выходные, «каждые N дней/недель/месяцев», «раз в неделю», «ежедневно/ежемесячно», end dates 21/12, 21.12.27, 21 декабря 2026); lines without repeat words read as before («в пятницу», «до 21/12» is still a deadline); the end date without a year; a typed rule giving a task on each of its days and none after the end; a line with a time becoming a repeating event or a task with a time; «Завтра» as the start; «Это и все следующие» for events (the rule ends the day before, edited ones go to «Удалённые», nothing new appears), from the first time (the whole rule and the original event), and for tasks (finished ones stay); English fallback. |
-| `e2e-v9-test.py`, new 0.9.0 click-through (**Russian only**) | **105 / 105** | Real browser. Typing «Тренировка в зале каждый вторник, четверг и субботу до 21/12» plus another line: the message, the rule, the clean title, the other line a normal task, the Calendar showing Tuesdays ahead and not Wednesdays, the task appearing on Saturday, nothing after 21 December. A line with a time: the question names the rule; «Событие» gives Mondays and Wednesdays. The repeating event's card: «Изменить», «Изменить повтор», «Удалить», no «Сделать задачей». The delete choice: «Это и все следующие» (no extra dialog), «Только это» with Undo, «Весь повтор» on the first time. «Удалить» directly in an ordinary event's card and in the task editor (with the usual confirmation). The menu of a repeating event (no «Сделать задачей»; «Удалить» asks the same). A repeating task from its editor. Contrast and overflow on 5 screens × light/dark × 390/320 px, with no «↻». Offline, including typing a repeat without network. |
+| `tests.html` unit tests | **392 / 392** in each of five time zones | UTC, America/Los_Angeles, Pacific/Kiritimati, Pacific/Auckland, Europe/Athens. 13 new tests for 0.9.0 cover: repeat words (weekdays in any form, «по …ам», будни/выходные, «каждые N дней/недель/месяцев», «раз в неделю», «ежедневно/ежемесячно», end dates 21/12, 21.12.27, 21 декабря 2026); lines without repeat words read as before («в пятницу», «до 21/12» is still a deadline); the end date without a year; a typed rule giving a task on each of its days and none after the end; a line with a time becoming a repeating event or a task with a time; «Завтра» as the start; «Это и все следующие» for events (the rule ends the day before, edited ones go to «Удалённые», nothing new appears), from the first time (the whole rule and the original event), and for tasks (finished ones stay); English fallback. 0.9.2 adds two tests: reordering moves only the given records among their own positions, so finished, deleted and other items keep theirs; a duplicate, deleted or unknown id is refused; goal steps reorder; «Дом» does not. |
+| `e2e-v9-test.py`, new 0.9.0 click-through (**Russian only**) | **141 / 141** | Real browser. Typing «Тренировка в зале каждый вторник, четверг и субботу до 21/12» plus another line: the message, the rule, the clean title, the other line a normal task, the Calendar showing Tuesdays ahead and not Wednesdays, the task appearing on Saturday, nothing after 21 December. A line with a time: the question names the rule; «Событие» gives Mondays and Wednesdays. The repeating event's card: «Изменить», «Изменить повтор», «Удалить», no «Сделать задачей». The delete choice: «Это и все следующие» (no extra dialog), «Только это» with Undo, «Весь повтор» on the first time. «Удалить» directly in an ordinary event's card and in the task editor (with the usual confirmation). The menu of a repeating event (no «Сделать задачей»; «Удалить» asks the same). A repeating task from its editor. 0.9.1: the event card and the task editor show one list of equal rows (no buttons of different sizes; one «Сохранить» in the form; the rows have one height). Contrast and overflow on 6 screens (with the task editor) × light/dark × 390/320 px, with no «↻». Offline, including typing a repeat without network. 0.9.2: in a list, a long press lifts an unfinished item and moving it changes the order. This was tested with the mouse and with **simulated touch through the browser's touch events**: the page does not scroll while a row is lifted, and no item window opens afterwards. Finished items cannot be moved. A tap still opens an item. Moving without holding moves nothing. The order survives a restart. Goal steps can be moved the same way on the goal screen, and the «следующий шаг» mark follows. Steps shown in «Задачи» cannot be moved. |
 | `e2e-v8-test.py`, 0.8.x click-through | **139 / 139** | |
 | `e2e-v7-test.py`, 0.7.0 click-through | **276 / 276** | |
-| `e2e-v6-test.py`, 0.6.0 click-through | **350 / 350** | 4 checks first failed, because deleting one time of a repeating event now asks «Только это / Это и все следующие». The test now chooses «Только это», and that flow was re-run: 26 / 26. |
+| `e2e-v6-test.py`, 0.6.0 click-through | **350 / 350** | Since 0.9.0, deleting one time of a repeating event asks «Только это / Это и все следующие»; the test chooses «Только это». |
 | `e2e-v5-test.py`, 0.5.x click-through | **725 / 725** | |
 | `e2e-test.py`, legacy scenario | **125 / 125** | |
 | `privacy-test.py` | **38 / 38** | The server saw only `GET` requests for the app's own files. |
-| `upgrade-test.py`: real service-worker update, two people side by side | **0.8.1: 45 / 45** (same data format; an open 0.8.1 window keeps working); 0.7.0: 47 / 47; 0.6.0: 47 / 47; 0.5.2: 47 / 47; 0.5.0: 47 / 47; 0.4.0: 46 / 46; 0.3.0: 46 / 46; 0.2.2, 0.2.1, 0.2.0: 47 / 47 → 0.9.0 | The three 0.2.x runs first failed one step. Run after 21:00, the app opened the evening overview by itself (that person has it on at 21:00), so the test's «＋» was hidden. This was the test's own timing, not an app fault: the test now goes to «Сегодня» first, and those three runs were repeated. |
+| `upgrade-test.py`: real service-worker update, two people side by side | **0.9.1, 0.9.0, 0.8.1: 45 / 45 each** (same data format; an open old window keeps working); 0.7.0: 47 / 47; 0.6.0: 47 / 47; 0.5.2: 47 / 47; 0.5.0: 47 / 47; 0.4.0: 46 / 46; 0.3.0: 46 / 46; 0.2.2, 0.2.1, 0.2.0: 47 / 47 → 0.9.2 | Since 0.9.0 the test starts its rollback step from «Сегодня»: run after 21:00, the app opens the evening overview by itself for a person who has it on at 21:00. |
 
 **English:** paused. New screens were tested in Russian only.
 
@@ -88,17 +90,19 @@ A version is **not published** unless every line is ticked:
 
 ## 5. On the iPhone (manual — NOT done by me)
 
-**Before updating to 0.9.0:** «Копии и данные → Сохранить копию».
+**Before updating to 0.9.2:** «Копии и данные → Сохранить копию».
 
 **After updating (about 10 minutes).**
-- [ ] `https://…/tests.html` in Safari shows «390 из 390 тестов пройдено».
-- [ ] «Обновить» → ⚙ → «Копии и данные» shows 0.9.0. Coming from 0.8.x, nothing is converted.
+- [ ] `https://…/tests.html` in Safari shows «392 из 392 тестов пройдено».
+- [ ] «Обновить» → ⚙ → «Копии и данные» shows 0.9.2. Coming from 0.8.x or 0.9.x, nothing is converted.
 - [ ] **Repeat in words:** «＋» → «Тренировка в зале каждый вторник, четверг и субботу до 21/12» → «Добавить». A message says «каждую неделю: вт, чт, сб, до … 21 дек». In the Calendar the coming Tuesdays, Thursdays and Saturdays show it. On the next of those days it is in «Сегодня».
 - [ ] With a time, «… в 20:44»: the question names the rule. «Событие» puts the events in the Calendar.
 - [ ] Watch autocorrect: «вт», «чт» or «21/12» must stay as typed.
 - [ ] **Delete all at once:** Календарь → a repeating event → «Удалить» (right in the card) → «Это и все следующие». That time and all later ones disappear; earlier ones stay. From the first time the button reads «Весь повтор».
 - [ ] «Удалить» → «Только это»: one time is removed, and «Отменить» brings it back.
 - [ ] A repeating event's card has no «Сделать задачей».
+- [ ] **0.9.2, moving rows:** open a list → hold an item still for half a second → it lifts → move it up or down → let go. The order is kept after closing the app. The page must not scroll while the row is lifted. A normal swipe up or down still scrolls, and a tap still opens the item. Try the same with the steps of a goal.
+- [ ] **0.9.1, calm editors:** open a task: one wide «Сохранить», then a list «Повторять, Сделать событием, Другие действия, Удалить», with rows of the same size. Open an event: its text, then «Изменить, Повторять, Сделать задачей, Удалить».
 - [ ] An ordinary event or task: «Удалить» is in the card or editor and asks for confirmation.
 - [ ] Light/dark: the delete choice is readable.
 

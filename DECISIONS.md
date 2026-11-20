@@ -387,6 +387,13 @@ Built on 0.8.1. Same address, same storage keys, **same data format (schema 7)**
 
 **Bug fixed: «Сделать задачей» on a repeating event.** The button was shown, but one time out of a rule cannot become a task (B14), so it failed with «повторяющуюся задачу нельзя преобразовать». The button is no longer shown on repeating events, in the card or in the menu. The message, if ever seen, now says what to do instead: delete the repeat and write it again (as a task with repeat words).
 
+**0.9.1 (owner, 2026-11-19): one calm layout for editors.** Too many buttons of different sizes in the editors were visual noise. The rule from now on: an editor has fields, one wide primary «Сохранить» (the sheet's ✕ closes it, so no «Отмена» there), then the actions as one list of equal rows (the same `.menu` rows as the long-press menu), with «Удалить» last in red. The event card follows the same rule: its text, then the list. No new buttons are added in rows next to each other.
+
+**0.9.2 (owner, 2026-11-19): moving rows by holding them — lists and goal steps only.** The owner asked to reorder list items and goal steps with a long press. This is a deliberate exception to «no manual drag-and-drop» (B11), which keeps applying to **tasks**.
+- **Where:** unfinished items of ordinary lists, within one list and one category (finished ones stay at the bottom); template items; the steps on a goal's screen. Not «Задачи», not the steps shown in «Задачи», not «Дом»/«Купить».
+- **How:** hold still for 0.45 s and the row lifts; while it is lifted the page does not scroll (non-passive `touchmove`). Releasing saves the order. Moving earlier means scrolling, and a tap still opens the row.
+- **Data:** only the moved records change places among the positions they already had in the stored array, so deleted, finished and other-category records keep theirs. If the list changed meanwhile the move is refused with a message. No undo; moving back is the same gesture.
+
 ## C. Technical decisions (Phase 0, proposed by Claude — open to review)
 
 ### Code structure

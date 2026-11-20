@@ -151,4 +151,33 @@ export function registerV9(h) {
     eq(DICTS.en['err.convertSeries'], 'a recurring task cannot be converted');
     ok(/удалите повтор/.test(DICTS.ru['err.convertSeries']));
   });
+
+  // ---------- 0.9.2: moving rows by long press ----------
+  const G2 = 'Версия 0.9.2 — перестановка';
+  test(G2, 'список: переставляются только перетаскиваемые пункты, остальные остаются на своих местах', () => {
+    const { store } = setup();
+    A.addList(store, 'Одежда');
+    const l = () => store.doc.lists.find(x => x.name === 'Одежда');
+    A.addContainerItems(store, 'lists', l().id, 'юбка\nкардиган\nперчатки\nкосынка');
+    const id = n => l().items.find(x => x.title === n).id;
+    A.setListItemDone(store, l().id, id('кардиган'), true);
+    A.deleteContainerItem(store, 'lists', l().id, id('перчатки'));
+    A.reorderItems(store, 'lists', l().id, [id('косынка'), id('юбка')]);
+    eq(l().items.map(x => x.title), ['косынка', 'кардиган', 'перчатки', 'юбка'], 'сделанный и удалённый не сдвинулись');
+    eq(A.reorderItems(store, 'lists', l().id, [id('косынка'), id('косынка')]), false, 'повтор в наборе — отказ');
+    eq(A.reorderItems(store, 'lists', l().id, [id('косынка'), id('перчатки')]), false, 'удалённый — отказ');
+    eq(A.reorderItems(store, 'lists', l().id, [id('косынка'), 'nope']), false, 'чужой — отказ');
+    eq(l().items.map(x => x.title), ['косынка', 'кардиган', 'перчатки', 'юбка']);
+  });
+
+  test(G2, 'шаги цели переставляются; «Дом» не переставляется', () => {
+    const { store } = setup();
+    A.addGoal(store, { title: 'Аудиокнига', steps: 'A\nB\nC' });
+    const g = () => store.doc.goals[0];
+    const ids = g().steps.map(x => x.id);
+    A.reorderSteps(store, g().id, [ids[2], ids[0], ids[1]]);
+    eq(g().steps.map(x => x.title), ['C', 'A', 'B']);
+    const home = store.doc.lists.find(x => x.kind === 'home');
+    if (home) eq(A.reorderItems(store, 'lists', home.id, home.items.filter(x => !x.deletedAt).map(x => x.id)), false);
+  });
 }

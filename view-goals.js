@@ -45,7 +45,8 @@ export function stepRow(g, s, { next = false, inTasks = false } = {}) {
   const open = inTasks
     ? `data-action="goal.open" data-id="${gid}" data-step="${sid}"`
     : `data-action="step.open" data-goal="${gid}" data-id="${sid}"`;
-  return `<div class="row irow gsrow${s.done ? ' is-done' : ''}${next ? ' next' : ''}" data-id="${sid}" data-goal="${gid}">
+  const drag = inTasks ? '' : ` data-drag="goal|${gid}"`; // 0.9.2: on the goal's own screen a long press moves the step
+  return `<div class="row irow gsrow${s.done ? ' is-done' : ''}${next ? ' next' : ''}" data-id="${sid}" data-goal="${gid}"${drag}>
     <input type="checkbox" data-action="step.toggle" data-goal="${gid}" data-id="${sid}" ${s.done ? 'checked' : ''} aria-label="${esc(t('aria.done'))}">
     <div class="grow ttext" ${open} role="button" tabindex="0"><div class="title">${esc(s.title)}</div>${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</div></div>`;
 }

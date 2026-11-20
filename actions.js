@@ -793,6 +793,38 @@ export function editContainerItem(store, coll, id, itemId, { title, category }) 
   });
 }
 
+// ---------- reordering by long press (0.9.2) ----------
+// `ids` = the dragged group (the rows the person saw, e.g. the unfinished items of one category) in the new order.
+// Only those records change places, and only among the positions they already had in the stored list, so
+// deleted, finished and other-category items keep their places. A list that changed meanwhile is refused.
+function reorderSlots(arr, ids) {
+  const set = new Set(ids);
+  const slots = [];
+  arr.forEach((x, i) => { if (set.has(x.id) && !x.deletedAt) slots.push(i); });
+  if (!ids.length || set.size !== ids.length || slots.length !== ids.length) throw appError('err.reorder');
+  const byId = new Map(arr.map(x => [x.id, x]));
+  const copy = arr.slice();
+  slots.forEach((slot, k) => { copy[slot] = byId.get(ids[k]); });
+  arr.splice(0, arr.length, ...copy);
+}
+
+export function reorderItems(store, coll, id, ids) {
+  return store.update('act.reorder', (d, ctx) => {
+    const c = container(d, ctx, coll, id);
+    if (c.kind === 'home') throw appError('err.reorder'); // «Дом» and «Купить» keep their own order
+    reorderSlots(c.items, ids);
+    c.updatedAt = ctx.now;
+  });
+}
+
+export function reorderSteps(store, goalId, ids) {
+  return store.update('act.reorder', (d, { now }) => {
+    const g = goalOf(d, goalId);
+    reorderSlots(g.steps, ids);
+    g.updatedAt = now;
+  });
+}
+
 export function deleteContainerItem(store, coll, id, itemId) {
   return store.update('act.editList', (d, ctx) => {
     const c = container(d, ctx, coll, id);

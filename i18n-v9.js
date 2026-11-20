@@ -13,6 +13,11 @@ export const RU9 = {
   'delrep.allHint': 'Это первый раз: повтор удалится целиком.',
   'delrep.done': 'Удалено: этот раз и все следующие ({n})', 'delrep.doneAll': 'Повтор удалён целиком ({n})',
   'act.deleteRepeat': 'Удалить повтор',
+  // 0.9.1: the actions list under a task or event
+  'edit.moreActions': 'Другие действия',
+  // 0.9.2: moving rows by long press
+  'act.reorder': 'Переставить', 'err.reorder': 'список успел измениться — попробуйте ещё раз',
+  'reorder.hint': 'Удерживайте строку, чтобы переставить',
   'err.notRepeating': 'это не повторяющаяся запись',
   // a repeating event cannot become a task (one time out of a rule)
   'err.convertSeries': 'повторяющуюся запись нельзя преобразовать: удалите повтор («Удалить» → «Это и все следующие») и запишите её заново'
